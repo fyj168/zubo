@@ -1,4 +1,5 @@
-import osimport re
+import os
+import re
 import requests
 import time
 import concurrent.futures
