@@ -1,0 +1,99 @@
+name: Fetch Shanxi Multicast to Blacklist
+
+on:
+  schedule:
+    # 北京时间 09:00 = UTC 01:00
+    - cron: '20 1 * * *'
+    # 北京时间 17:00 = UTC 09:00
+    - cron: '20 9 * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: 抓取网页并提取组播源
+        id: fetch
+        run: |
+          TARGET_URL="https://my9.ltd/tvsh/?t=multicast&province=sx&isp=all&limit=20&valid=1"
+          OUTPUT_FILE="black.yml"
+          echo "开始抓取山西有效组播..."
+
+          # 下载网页
+          HTML_CONTENT=$(curl -s -L "$TARGET_URL" | tr '\n' ' ' | sed 's/<[^>]*>/ /g')
+
+          # 提取所有符合IP地址格式的字符串
+          echo "$HTML_CONTENT" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | sort -u > extracted_ips.txt
+
+          IP_COUNT=$(wc -l < extracted_ips.txt | tr -d ' ')
+          echo "共提取到 $IP_COUNT 个唯一IP地址。"
+
+          # 创建 black.yml 文件
+          echo "# 山西组播源黑名单" > $OUTPUT_FILE
+          echo "# 自动生成于: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $OUTPUT_FILE
+          echo "# 来源: $TARGET_URL" >> $OUTPUT_FILE
+          echo "# 总数: $IP_COUNT" >> $OUTPUT_FILE
+          echo "" >> $OUTPUT_FILE
+
+          # 转换为IPTV黑名单格式 (示例格式，可根据你的播放器需求调整)
+          echo "blacklist:" >> $OUTPUT_FILE
+          while read ip; do
+            # 这里转换为 rtp:// 组播格式，端口通常为 5140
+            echo "  - rtp://$ip:5140" >> $OUTPUT_FILE
+          done < extracted_ips.txt
+
+          # 也可以选择直接输出IP列表格式
+          # echo "# 纯IP列表" >> $OUTPUT_FILE
+          # while read ip; do
+          #   echo "$ip" >> $OUTPUT_FILE
+          # done < extracted_ips.txt
+
+          echo "提取的IP列表预览 (前5个):"
+          head -5 extracted_ips.txt
+
+          echo "black.yml 文件内容预览:"
+          head -10 $OUTPUT_FILE
+
+          echo "ip_count=$IP_COUNT" >> $GITHUB_OUTPUT
+          echo "output_file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
+      - name: 检查文件变化
+        id: check-change
+        run: |
+          OUTPUT_FILE="${{ steps.fetch.outputs.output_file }}"
+          if [ -f "$OUTPUT_FILE" ]; then
+            if git diff --quiet HEAD -- "$OUTPUT_FILE"; then
+              echo "文件无变化，无需提交。"
+              echo "has_change=false" >> $GITHUB_OUTPUT
+            else
+              echo "检测到文件内容变化。"
+              echo "has_change=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "输出文件不存在。"
+            echo "has_change=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 提交并推送更新
+        if: steps.check-change.outputs.has_change == 'true'
+        run: |
+          OUTPUT_FILE="${{ steps.fetch.outputs.output_file }}"
+          IP_COUNT="${{ steps.fetch.outputs.ip_count }}"
+          git add "$OUTPUT_FILE"
+          git commit -m "📡 更新山西组播黑名单 [$IP_COUNT个IP] - $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
