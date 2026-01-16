@@ -1,0 +1,336 @@
+name: Update TV Source File - 山西组播
+
+on:
+  schedule:
+    # 北京时间 09:00 = UTC 01:00
+    - cron: '10 1 * * *'
+    # 北京时间 17:00 = UTC 09:00  
+    - cron: '10 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-file:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Git
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+    - name: Prepare directory
+      run: |
+        mkdir -p tv
+        echo "创建 tv 目录..."
+        
+    - name: Download TV source file
+      id: download
+      run: |
+        echo "开始下载直播源文件..."
+        
+        REMOTE_URL="https://my9.ltd/tv/pllive.txt"
+        LOCAL_PATH="tv/pllive.txt"
+        TEMP_FILE="pllive_temp.txt"
+        
+        echo "目标URL: $REMOTE_URL"
+        echo "保存路径: $LOCAL_PATH"
+        
+        # 清空临时文件
+        rm -f "$TEMP_FILE" "$LOCAL_PATH"
+        
+        # 下载文件
+        echo ""
+        echo "=== 下载直播源文件 ==="
+        curl -s -L \
+          -o "$TEMP_FILE" \
+          -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+          --max-time 60 \
+          "$REMOTE_URL"
+        
+        if [ -f "$TEMP_FILE" ]; then
+          FILE_SIZE=$(wc -c < "$TEMP_FILE" 2>/dev/null || echo 0)
+          echo "原始文件大小: $FILE_SIZE 字节"
+          
+          if [ $FILE_SIZE -gt 1000 ]; then
+            echo "原始文件下载成功"
+            mv "$TEMP_FILE" "$LOCAL_PATH"
+            echo "downloaded=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ 原始文件太小，可能下载失败"
+            rm -f "$TEMP_FILE"
+            echo "downloaded=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "❌ 文件下载失败"
+          echo "downloaded=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Filter Shanxi IPTV only
+      id: filter
+      if: steps.download.outputs.downloaded == 'true'
+      run: |
+        echo "开始过滤山西组播地址..."
+        
+        SOURCE_FILE="tv/pllive.txt"
+        SHANXI_FILE="tv/pllive_shanxi.txt"
+        
+        if [ ! -f "$SOURCE_FILE" ]; then
+          echo "❌ 源文件不存在"
+          exit 1
+        fi
+        
+        # 统计原始文件信息
+        ORIGINAL_SIZE=$(wc -c < "$SOURCE_FILE")
+        ORIGINAL_LINES=$(wc -l < "$SOURCE_FILE" 2>/dev/null || echo 0)
+        
+        echo "原始文件:"
+        echo "- 大小: $ORIGINAL_SIZE 字节"
+        echo "- 行数: $ORIGINAL_LINES 行"
+        
+        # 过滤山西相关的内容
+        # 匹配山西组播IP地址 (239.253.x.x 或 rtp://239.253.x.x)
+        # 同时保留山西相关的频道名称
+        
+        echo ""
+        echo "开始过滤..."
+        
+        # 创建山西专用文件，添加文件头
+        echo "#EXTM3U" > "$SHANXI_FILE"
+        echo "# 山西组播地址过滤版" >> "$SHANXI_FILE"
+        echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$SHANXI_FILE"
+        echo "# 源文件: $SOURCE_FILE" >> "$SHANXI_FILE"
+        echo "" >> "$SHANXI_FILE"
+        
+        # 过滤逻辑：
+        # 1. 包含"山西"的频道名称
+        # 2. 239.253开头的组播IP地址
+        # 3. rtp://239.253开头的组播地址
+        
+        SHANXI_COUNT=0
+        while IFS= read -r line || [ -n "$line" ]; do
+          # 如果行包含"山西"，保留整个条目（包括后续的EXTINF和URL）
+          if [[ "$line" =~ "山西" || "$line" =~ "sx" || "$line" =~ "SX" || "$line" =~ "shanxi" || "$line" =~ "Shanxi" ]]; then
+            echo "$line" >> "$SHANXI_FILE"
+            SHANXI_COUNT=$((SHANXI_COUNT + 1))
+            continue
+          fi
+          
+          # 如果行是239.253开头的IP地址
+          if [[ "$line" =~ ^239\.253\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
+            echo "$line" >> "$SHANXI_FILE"
+            SHANXI_COUNT=$((SHANXI_COUNT + 1))
+            continue
+          fi
+          
+          # 如果行是rtp://239.253开头的地址
+          if [[ "$line" =~ ^rtp://239\.253\.[0-9]+\.[0-9]+:[0-9]+(/[^ ]*)?$ ]]; then
+            echo "$line" >> "$SHANXI_FILE"
+            SHANXI_COUNT=$((SHANXI_COUNT + 1))
+            continue
+          fi
+          
+          # 如果行包含239.253且不是注释
+          if [[ "$line" =~ 239\.253 ]] && [[ ! "$line" =~ ^# ]]; then
+            echo "$line" >> "$SHANXI_FILE"
+            SHANXI_COUNT=$((SHANXI_COUNT + 1))
+          fi
+        done < "$SOURCE_FILE"
+        
+        # 统计过滤后的文件信息
+        SHANXI_SIZE=$(wc -c < "$SHANXI_FILE")
+        SHANXI_LINES=$(wc -l < "$SHANXI_FILE" 2>/dev/null || echo 0)
+        
+        echo ""
+        echo "=== 过滤结果 ==="
+        echo "山西组播文件: $SHANXI_FILE"
+        echo "- 大小: $SHANXI_SIZE 字节"
+        echo "- 行数: $SHANXI_LINES 行"
+        echo "- 过滤出的条目数: $SHANXI_COUNT 个"
+        
+        # 计算压缩率
+        if [ $ORIGINAL_SIZE -gt 0 ]; then
+          RATIO=$((SHANXI_SIZE * 100 / ORIGINAL_SIZE))
+          echo "- 压缩率: 约 $RATIO% (原文件的 $RATIO%)"
+        fi
+        
+        # 显示前10行内容预览
+        echo ""
+        echo "=== 内容预览 (前15行) ==="
+        head -15 "$SHANXI_FILE"
+        
+        # 如果没有找到山西内容，添加提示
+        if [ $SHANXI_COUNT -eq 0 ]; then
+          echo ""
+          echo "⚠️ 警告: 未找到山西相关的内容"
+          echo "# 未找到山西组播地址，请检查源文件" >> "$SHANXI_FILE"
+          echo "# 原始文件可能不包含山西IP或格式已变化" >> "$SHANXI_FILE"
+          
+          # 显示一些可能的山西IP示例
+          echo "" >> "$SHANXI_FILE"
+          echo "# 山西组播示例:" >> "$SHANXI_FILE"
+          echo "# rtp://239.253.0.1:5140" >> "$SHANXI_FILE"
+          echo "# rtp://239.253.1.1:1234" >> "$SHANXI_FILE"
+        fi
+        
+        echo "filtered=true" >> $GITHUB_OUTPUT
+        echo "shanxi_count=$SHANXI_COUNT" >> $GITHUB_OUTPUT
+        
+    - name: Check if file changed
+      id: check-change
+      if: steps.filter.outputs.filtered == 'true'
+      run: |
+        echo "检查文件变化..."
+        
+        FILE_PATH="tv/pllive_shanxi.txt"
+        
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "❌ 山西组播文件不存在"
+          echo "has_change=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        # 使用简单的大小比较
+        CURRENT_SIZE=$(wc -c < "$FILE_PATH" 2>/dev/null || echo 0)
+        echo "当前文件大小: $CURRENT_SIZE 字节"
+        
+        if git ls-files "$FILE_PATH" >/dev/null 2>&1; then
+          # 获取Git中的文件大小
+          GIT_SIZE=$(git cat-file -s :"$FILE_PATH" 2>/dev/null || echo 0)
+          echo "Git中文件大小: $GIT_SIZE 字节"
+          
+          if [ $CURRENT_SIZE -eq $GIT_SIZE ] && [ $CURRENT_SIZE -gt 100 ]; then
+            # 如果大小相同且文件较大，进一步检查内容
+            CURRENT_HASH=$(md5sum "$FILE_PATH" | cut -d' ' -f1)
+            GIT_HASH=$(git hash-object "$FILE_PATH")
+            
+            if [ "$CURRENT_HASH" = "$GIT_HASH" ]; then
+              echo "文件无变化"
+              echo "has_change=false" >> $GITHUB_OUTPUT
+            else
+              echo "检测到文件变化 (哈希不同)"
+              echo "has_change=true" >> $GITHUB_OUTPUT
+            fi
+          elif [ $CURRENT_SIZE -ne $GIT_SIZE ]; then
+            echo "检测到文件变化 (大小不同)"
+            echo "has_change=true" >> $GITHUB_OUTPUT
+          else
+            echo "文件可能为空或无效"
+            echo "has_change=false" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "文件未被Git跟踪，是新文件"
+          echo "has_change=true" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Commit and push changes
+      if: steps.check-change.outputs.has_change == 'true'
+      run: |
+        echo "准备提交山西组播文件..."
+        
+        SOURCE_FILE="tv/pllive.txt"
+        SHANXI_FILE="tv/pllive_shanxi.txt"
+        
+        if [ ! -f "$SHANXI_FILE" ]; then
+          echo "❌ 山西组播文件不存在，无法提交"
+          exit 1
+        fi
+        
+        FILE_SIZE=$(wc -c < "$SHANXI_FILE")
+        FILE_LINES=$(wc -l < "$SHANXI_FILE" 2>/dev/null || echo 0)
+        FILE_MD5=$(md5sum "$SHANXI_FILE" | cut -d' ' -f1 2>/dev/null || echo "unknown")
+        SHANXI_COUNT="${{ steps.filter.outputs.shanxi_count }}"
+        
+        echo "=== 提交信息 ==="
+        echo "文件大小: $FILE_SIZE 字节"
+        echo "文件行数: $FILE_LINES 行"
+        echo "山西条目数: $SHANXI_COUNT 个"
+        echo "文件MD5: $FILE_MD5"
+        
+        git add "$SHANXI_FILE"
+        
+        # 提交信息
+        COMMIT_MSG="📡 更新山西组播地址 - $(date '+%Y-%m-%d %H:%M UTC')"
+        COMMIT_MSG="$COMMIT_MSG | 条目: ${SHANXI_COUNT}个"
+        COMMIT_MSG="$COMMIT_MSG | 大小: ${FILE_SIZE}字节"
+        
+        if [ $FILE_LINES -gt 0 ]; then
+          COMMIT_MSG="$COMMIT_MSG | 行数: ${FILE_LINES}行"
+        fi
+        
+        git commit -m "$COMMIT_MSG"
+        
+        echo "推送到GitHub..."
+        git push
+        
+        echo "✅ 提交并推送完成"
+        
+    - name: Show detailed final status
+      run: |
+        echo "=========================================="
+        echo "          山西组播抓取报告"
+        echo "=========================================="
+        
+        echo "执行完成时间: $(date '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "对应北京时间: $(date -d '+8 hours' '+%Y-%m-%d %H:%M:%S')"
+        
+        echo ""
+        echo "📁 文件列表:"
+        ls -lh tv/*.txt 2>/dev/null || echo "tv目录下无文件"
+        
+        echo ""
+        if [ -f "tv/pllive_shanxi.txt" ]; then
+          echo "✅ 山西组播文件已生成"
+          echo ""
+          echo "📊 文件信息:"
+          ls -lh "tv/pllive_shanxi.txt"
+          
+          echo ""
+          echo "🔍 内容分析:"
+          FILE_SIZE=$(wc -c < "tv/pllive_shanxi.txt")
+          FILE_LINES=$(wc -l < "tv/pllive_shanxi.txt" 2>/dev/null || echo 0)
+          
+          echo "文件大小: $FILE_SIZE 字节"
+          echo "文件行数: $FILE_LINES 行"
+          
+          if [ $FILE_SIZE -gt 100 ]; then
+            echo ""
+            echo "📺 频道预览:"
+            echo "----------------------------------------"
+            # 显示非注释行的前10行
+            grep -v "^#" "tv/pllive_shanxi.txt" | head -10
+            echo "----------------------------------------"
+            
+            # 统计组播地址数量
+            echo ""
+            echo "🔢 地址统计:"
+            echo "rtp组播地址: $(grep -c "rtp://" "tv/pllive_shanxi.txt" 2>/dev/null || echo "0")"
+            echo "239.253地址: $(grep -c "239\.253" "tv/pllive_shanxi.txt" 2>/dev/null || echo "0")"
+            echo "包含'山西'的频道: $(grep -c "山西" "tv/pllive_shanxi.txt" 2>/dev/null || echo "0")"
+          else
+            echo "⚠️ 文件内容过少，可能未找到山西组播"
+            echo "完整内容:"
+            echo "----------------------------------------"
+            cat "tv/pllive_shanxi.txt"
+            echo "----------------------------------------"
+          fi
+        else
+          echo "❌ 山西组播文件未生成"
+        fi
+        
+        echo ""
+        echo "🔄 原始文件状态:"
+        if [ -f "tv/pllive.txt" ]; then
+          ORIG_SIZE=$(wc -c < "tv/pllive.txt")
+          echo "- 原始文件大小: $ORIG_SIZE 字节"
+        else
+          echo "- 原始文件: 不存在"
+        fi
+        
+        echo ""
+        echo "⏰ 下次自动执行: 每天 UTC 01:10 和 09:10 (北京时间 09:10 和 17:10)"
