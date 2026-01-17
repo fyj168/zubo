@@ -1,4 +1,4 @@
-name: Update TV Source File
+name: Update Shanxi TV Sources
 
 on:
   schedule:
@@ -48,138 +48,144 @@ jobs:
           --range 0-10240 \
           "$REMOTE_URL" | head -c 500 && echo "..."
           
-    - name: Download TV source file
+    - name: Download and filter Shanxi sources
       id: download
       run: |
-        echo "开始下载直播源文件..."
+        echo "开始下载并过滤山西联通/电信组播源..."
         
         REMOTE_URL="https://my9.ltd/tv/pllive.txt"
-        LOCAL_PATH="tv/pllive.txt"
+        LOCAL_PATH="tv/shanxi_iptv.txt"
         TEMP_FILE="pllive_temp.txt"
+        FILTERED_FILE="shanxi_filtered.txt"
         
         echo "目标URL: $REMOTE_URL"
         echo "保存路径: $LOCAL_PATH"
         
         # 清空临时文件
-        rm -f "$TEMP_FILE" "$LOCAL_PATH"
+        rm -f "$TEMP_FILE" "$FILTERED_FILE" "$LOCAL_PATH"
         
-        # 方法1: 使用与本地测试完全相同的参数
+        # 下载完整文件
         echo ""
-        echo "=== 方法1: 完全模仿本地测试 ==="
-        curl -v -L \
+        echo "=== 下载原始文件 ==="
+        curl -s -L \
           -o "$TEMP_FILE" \
-          -H "User-Agent: curl/8.8.0" \
-          -H "Accept: */*" \
+          -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
           --max-time 60 \
-          "$REMOTE_URL" 2>&1 | grep -E "HTTP/|Content-Type|Content-Length|Server" | head -10 || true
+          "$REMOTE_URL"
         
-        if [ -f "$TEMP_FILE" ]; then
-          FILE_SIZE=$(wc -c < "$TEMP_FILE" 2>/dev/null || echo 0)
-          echo "下载文件大小: $FILE_SIZE 字节"
+        if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+          FILE_SIZE=$(wc -c < "$TEMP_FILE")
+          echo "原始文件大小: $FILE_SIZE 字节"
+          echo "原始文件行数: $(wc -l < "$TEMP_FILE")"
           
-          if [ $FILE_SIZE -gt 1000 ]; then
-            echo "文件大小看起来正常"
+          # 过滤山西联通和山西电信组播源
+          echo ""
+          echo "=== 过滤山西联通/电信组播源 ==="
+          
+          # 创建文件头
+          echo "# Shanxi IPTV Group Channels" > "$FILTERED_FILE"
+          echo "# 山西联通/电信组播源" >> "$FILTERED_FILE"
+          echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$FILTERED_FILE"
+          echo "# 数据来源: $REMOTE_URL" >> "$FILTERED_FILE"
+          echo "" >> "$FILTERED_FILE"
+          
+          # 1. 首先抓取明显的山西相关频道（包含频道名）
+          echo "# 山西联通" >> "$FILTERED_FILE"
+          grep -E -i "山西.*联通|联通.*山西|shanxi.*unicom" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
+          
+          echo "" >> "$FILTERED_FILE"
+          echo "# 山西电信" >> "$FILTERED_FILE"
+          grep -E -i "山西.*电信|电信.*山西|shanxi.*telecom" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
+          
+          echo "" >> "$FILTERED_FILE"
+          echo "# 山西移动" >> "$FILTERED_FILE"
+          grep -E -i "山西.*移动|移动.*山西|shanxi.*mobile" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
+          
+          echo "" >> "$FILTERED_FILE"
+          echo "# 山西组播地址 (rtp/udp)" >> "$FILTERED_FILE"
+          
+          # 2. 抓取组播地址 (rtp://, udp://)
+          # 先抓取可能包含山西的组播行
+          grep -E -B1 -A0 "rtp://.*山西|udp://.*山西|rtp://.*239\..*山西|udp://.*239\..*山西" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
+          
+          # 3. 抓取所有山西相关的行（宽泛匹配）
+          echo "" >> "$FILTERED_FILE"
+          echo "# 其他山西相关频道" >> "$FILTERED_FILE"
+          grep -E -i "山西|sx-|shanxi" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
+          
+          # 4. 专门抓取组播地址段 (239.开头的IP)
+          echo "" >> "$FILTERED_FILE"
+          echo "# 组播地址段 (可能需要根据山西网络配置)" >> "$FILTERED_FILE"
+          grep -E -B1 "rtp://239\.|udp://239\.|rtp://232\.|udp://232\." "$TEMP_FILE" | head -50 >> "$FILTERED_FILE" 2>/dev/null || true
+          
+          # 去重和清理
+          echo ""
+          echo "=== 清理和去重 ==="
+          sort -u "$FILTERED_FILE" -o "$FILTERED_FILE.tmp"
+          mv "$FILTERED_FILE.tmp" "$LOCAL_PATH"
+          
+          # 移除完全空的行
+          sed -i '/^$/d' "$LOCAL_PATH"
+          
+          # 统计结果
+          FILTERED_SIZE=$(wc -c < "$LOCAL_PATH")
+          FILTERED_LINES=$(wc -l < "$LOCAL_PATH")
+          
+          echo "过滤后文件大小: $FILTERED_SIZE 字节"
+          echo "过滤后行数: $FILTERED_LINES 行"
+          
+          if [ $FILTERED_LINES -gt 5 ]; then
+            echo "✅ 成功过滤出山西相关频道"
+            echo "downloaded=true" >> $GITHUB_OUTPUT
+            echo "filtered_lines=$FILTERED_LINES" >> $GITHUB_OUTPUT
             
-            # 显示文件开头内容
-            echo "文件开头50个字符:"
-            head -c 50 "$TEMP_FILE" && echo ""
+            # 显示过滤出的频道类型统计
+            echo ""
+            echo "=== 频道类型统计 ==="
+            echo "山西联通: $(grep -c -i "联通" "$LOCAL_PATH") 个"
+            echo "山西电信: $(grep -c -i "电信" "$LOCAL_PATH") 个"
+            echo "山西移动: $(grep -c -i "移动" "$LOCAL_PATH") 个"
+            echo "组播地址: $(grep -c -E "rtp://|udp://" "$LOCAL_PATH") 个"
+            echo "总山西相关: $(grep -c -i "山西" "$LOCAL_PATH") 个"
             
-            # 放宽内容验证条件
-            if head -c 100 "$TEMP_FILE" | grep -q -E "MoMo更新|#genre#|#EXTM3U|上海电信|http://|https://|rtp://"; then
-              echo "✅ 内容验证通过 - 包含直播源特征"
-              mv "$TEMP_FILE" "$LOCAL_PATH"
-              echo "downloaded=true" >> $GITHUB_OUTPUT
-              echo "method=curl_exact" >> $GITHUB_OUTPUT
-            else
-              echo "⚠️ 内容验证失败，显示详细内容:"
-              echo "================================="
-              head -c 200 "$TEMP_FILE"
-              echo ""
-              echo "================================="
-              
-              # 如果是小文件，显示全部内容
-              if [ $FILE_SIZE -lt 5000 ]; then
-                echo "完整文件内容:"
-                cat "$TEMP_FILE"
-              fi
-              
-              # 但依然保存文件用于调试
-              mv "$TEMP_FILE" "$LOCAL_PATH"
-              echo "⚠️ 内容验证失败但保存文件用于调试"
-              echo "downloaded=true" >> $GITHUB_OUTPUT
-              echo "method=curl_exact_with_warning" >> $GITHUB_OUTPUT
-            fi
           else
-            echo "❌ 文件太小，可能下载失败"
-            rm -f "$TEMP_FILE"
+            echo "⚠️ 过滤出的内容太少，尝试备用方法"
+            
+            # 备用方法：抓取所有组播源
+            echo ""
+            echo "=== 备用方法：抓取所有组播源 ==="
+            echo "# 全部组播源 (备用)" > "$LOCAL_PATH"
+            echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$LOCAL_PATH"
+            echo "" >> "$LOCAL_PATH"
+            
+            # 抓取所有组播地址
+            grep -E -B1 "rtp://|udp://" "$TEMP_FILE" | head -100 >> "$LOCAL_PATH" 2>/dev/null || true
+            
+            ALTERNATIVE_LINES=$(wc -l < "$LOCAL_PATH")
+            echo "备用方法行数: $ALTERNATIVE_LINES 行"
+            
+            if [ $ALTERNATIVE_LINES -gt 10 ]; then
+              echo "✅ 备用方法成功"
+              echo "downloaded=true" >> $GITHUB_OUTPUT
+              echo "filtered_lines=$ALTERNATIVE_LINES" >> $GITHUB_OUTPUT
+              echo "method=alternative_all_multicast" >> $GITHUB_OUTPUT
+            else
+              echo "❌ 所有方法都失败"
+              echo "downloaded=false" >> $GITHUB_OUTPUT
+            fi
           fi
+          
+          # 清理临时文件
+          rm -f "$TEMP_FILE" "$FILTERED_FILE"
+          
         else
           echo "❌ 文件下载失败"
-        fi
-        
-        # 方法2: 尝试不同的User-Agent
-        if [ ! -f "$LOCAL_PATH" ] || [ ! -s "$LOCAL_PATH" ]; then
-          echo ""
-          echo "=== 方法2: 尝试浏览器User-Agent ==="
+          echo "downloaded=false" >> $GITHUB_OUTPUT
           
-          USER_AGENTS=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-          )
-          
-          for UA in "${USER_AGENTS[@]}"; do
-            echo ""
-            echo "尝试 User-Agent: $(echo $UA | cut -c1-50)..."
-            
-            curl -s -L \
-              -o "$TEMP_FILE" \
-              -H "User-Agent: $UA" \
-              -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
-              -H "Accept-Language: zh-CN,zh;q=0.9" \
-              -H "Referer: https://my9.ltd/" \
-              --max-time 45 \
-              "$REMOTE_URL"
-              
-            if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
-              FILE_SIZE=$(wc -c < "$TEMP_FILE")
-              echo "下载大小: $FILE_SIZE 字节"
-              
-              if [ $FILE_SIZE -gt 50000 ]; then  # 期望的文件很大
-                echo "✅ 可能下载成功，文件大小合理"
-                mv "$TEMP_FILE" "$LOCAL_PATH"
-                echo "downloaded=true" >> $GITHUB_OUTPUT
-                echo "method=ua_$(echo $UA | cut -d' ' -f1 | tr -d '()')" >> $GITHUB_OUTPUT
-                break
-              fi
-            fi
-            sleep 1
-          done
-        fi
-        
-        # 最终检查
-        if [ -f "$LOCAL_PATH" ] && [ -s "$LOCAL_PATH" ]; then
-          FINAL_SIZE=$(wc -c < "$LOCAL_PATH")
-          FINAL_LINES=$(wc -l < "$LOCAL_PATH" 2>/dev/null || echo 0)
-          
-          echo ""
-          echo "=== 最终结果 ==="
-          echo "文件路径: $LOCAL_PATH"
-          echo "文件大小: $FINAL_SIZE 字节"
-          echo "文件行数: $FINAL_LINES 行"
-          
-          echo "前3行内容:"
-          head -3 "$LOCAL_PATH" 2>/dev/null || echo "无法读取文件"
-        else
-          echo ""
-          echo "❌ 所有下载方法都失败"
-          
-          # 创建空文件占位
-          echo "# 直播源文件下载失败 - $(date)" > "$LOCAL_PATH"
-          echo "# 请检查URL: $REMOTE_URL" >> "$LOCAL_PATH"
-          echo "⚠️ 创建了占位文件"
-          echo "downloaded=true" >> $GITHUB_OUTPUT
-          echo "method=placeholder" >> $GITHUB_OUTPUT
+          # 创建占位文件
+          echo "# 山西IPTV组播源" > "$LOCAL_PATH"
+          echo "# 文件下载失败 - $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$LOCAL_PATH"
+          echo "# 原始URL: $REMOTE_URL" >> "$LOCAL_PATH"
         fi
         
     - name: Check if file changed
@@ -188,7 +194,7 @@ jobs:
       run: |
         echo "检查文件变化..."
         
-        FILE_PATH="tv/pllive.txt"
+        FILE_PATH="tv/shanxi_iptv.txt"
         
         if [ ! -f "$FILE_PATH" ]; then
           echo "❌ 文件不存在"
@@ -199,14 +205,15 @@ jobs:
         # 使用简单的大小比较
         CURRENT_SIZE=$(wc -c < "$FILE_PATH" 2>/dev/null || echo 0)
         echo "当前文件大小: $CURRENT_SIZE 字节"
+        echo "当前文件行数: $(wc -l < "$FILE_PATH") 行"
         
         if git ls-files "$FILE_PATH" >/dev/null 2>&1; then
           # 获取Git中的文件大小
           GIT_SIZE=$(git cat-file -s :"$FILE_PATH" 2>/dev/null || echo 0)
           echo "Git中文件大小: $GIT_SIZE 字节"
           
-          if [ $CURRENT_SIZE -eq $GIT_SIZE ] && [ $CURRENT_SIZE -gt 100 ]; then
-            # 如果大小相同且文件较大，进一步检查内容
+          if [ $CURRENT_SIZE -eq $GIT_SIZE ] && [ $CURRENT_SIZE -gt 10 ]; then
+            # 如果大小相同且文件合理，进一步检查内容
             CURRENT_HASH=$(md5sum "$FILE_PATH" | cut -d' ' -f1)
             GIT_HASH=$(git hash-object "$FILE_PATH")
             
@@ -232,9 +239,9 @@ jobs:
     - name: Commit and push changes
       if: steps.check-change.outputs.has_change == 'true'
       run: |
-        echo "准备提交文件..."
+        echo "准备提交山西IPTV文件..."
         
-        FILE_PATH="tv/pllive.txt"
+        FILE_PATH="tv/shanxi_iptv.txt"
         
         if [ ! -f "$FILE_PATH" ]; then
           echo "❌ 文件不存在，无法提交"
@@ -244,25 +251,40 @@ jobs:
         FILE_SIZE=$(wc -c < "$FILE_PATH")
         FILE_LINES=$(wc -l < "$FILE_PATH" 2>/dev/null || echo 0)
         FILE_MD5=$(md5sum "$FILE_PATH" | cut -d' ' -f1 2>/dev/null || echo "unknown")
-        METHOD="${{ steps.download.outputs.method }}"
+        
+        # 统计各类频道数量
+        UNICOM_COUNT=$(grep -c -i "联通" "$FILE_PATH" 2>/dev/null || echo 0)
+        TELECOM_COUNT=$(grep -c -i "电信" "$FILE_PATH" 2>/dev/null || echo 0)
+        MOBILE_COUNT=$(grep -c -i "移动" "$FILE_PATH" 2>/dev/null || echo 0)
+        MULTICAST_COUNT=$(grep -c -E "rtp://|udp://" "$FILE_PATH" 2>/dev/null || echo 0)
+        SHANXI_COUNT=$(grep -c -i "山西" "$FILE_PATH" 2>/dev/null || echo 0)
         
         echo "=== 提交信息 ==="
         echo "文件大小: $FILE_SIZE 字节"
         echo "文件行数: $FILE_LINES 行"
-        echo "文件MD5: $FILE_MD5"
-        echo "下载方法: $METHOD"
+        echo "山西联通: $UNICOM_COUNT 个"
+        echo "山西电信: $TELECOM_COUNT 个"
+        echo "山西移动: $MOBILE_COUNT 个"
+        echo "组播地址: $MULTICAST_COUNT 个"
+        echo "山西相关: $SHANXI_COUNT 个"
         
         git add "$FILE_PATH"
         
         # 提交信息
-        COMMIT_MSG="📺 更新直播源 - $(date '+%Y-%m-%d %H:%M UTC')"
+        COMMIT_MSG="📡 更新山西IPTV组播源 - $(date '+%Y-%m-%d %H:%M UTC')"
         COMMIT_MSG="$COMMIT_MSG | 大小: ${FILE_SIZE}字节"
         
         if [ $FILE_LINES -gt 0 ]; then
           COMMIT_MSG="$COMMIT_MSG | 行数: ${FILE_LINES}行"
         fi
         
-        COMMIT_MSG="$COMMIT_MSG | 方法: ${METHOD}"
+        if [ $SHANXI_COUNT -gt 0 ]; then
+          COMMIT_MSG="$COMMIT_MSG | 山西频道: ${SHANXI_COUNT}个"
+        fi
+        
+        if [ $MULTICAST_COUNT -gt 0 ]; then
+          COMMIT_MSG="$COMMIT_MSG | 组播: ${MULTICAST_COUNT}个"
+        fi
         
         git commit -m "$COMMIT_MSG"
         
@@ -274,56 +296,53 @@ jobs:
     - name: Show detailed final status
       run: |
         echo "=========================================="
-        echo "          详细执行报告"
+        echo "          山西IPTV源更新报告"
         echo "=========================================="
         
         echo "执行完成时间: $(date '+%Y-%m-%d %H:%M:%S UTC')"
         echo "对应北京时间: $(date -d '+8 hours' '+%Y-%m-%d %H:%M:%S')"
         
         echo ""
-        echo "📁 目录结构:"
-        find . -name "*.txt" -type f | head -20
-        
-        echo ""
-        if [ -f "tv/pllive.txt" ]; then
-          echo "✅ 目标文件存在"
+        if [ -f "tv/shanxi_iptv.txt" ]; then
+          echo "✅ 山西IPTV文件存在"
           echo "文件信息:"
-          ls -lh "tv/pllive.txt"
+          ls -lh "tv/shanxi_iptv.txt"
           
           echo ""
           echo "📊 内容分析:"
-          FILE_SIZE=$(wc -c < "tv/pllive.txt")
+          FILE_SIZE=$(wc -c < "tv/shanxi_iptv.txt")
+          FILE_LINES=$(wc -l < "tv/shanxi_iptv.txt")
           echo "文件大小: $FILE_SIZE 字节"
+          echo "文件行数: $FILE_LINES 行"
           
-          if [ $FILE_SIZE -lt 2000 ]; then
-            echo "⚠️ 警告: 文件很小，可能不是有效的直播源"
-            echo "完整内容:"
-            echo "----------------------------------------"
-            cat "tv/pllive.txt"
-            echo "----------------------------------------"
-          else
-            echo "内容预览 (前10行):"
-            echo "----------------------------------------"
-            head -10 "tv/pllive.txt"
-            echo "----------------------------------------"
-            
-            # 统计信息
-            echo ""
-            echo "🔢 统计信息:"
-            echo "总行数: $(wc -l < "tv/pllive.txt" 2>/dev/null || echo "N/A")"
-            echo "HTTP链接数: $(grep -c "http://" "tv/pllive.txt" 2>/dev/null || echo "0")"
-            echo "HTTPS链接数: $(grep -c "https://" "tv/pllive.txt" 2>/dev/null || echo "0")"
-          fi
+          echo ""
+          echo "🔢 频道统计:"
+          echo "山西联通: $(grep -c -i "联通" "tv/shanxi_iptv.txt") 个"
+          echo "山西电信: $(grep -c -i "电信" "tv/shanxi_iptv.txt") 个"
+          echo "山西移动: $(grep -c -i "移动" "tv/shanxi_iptv.txt") 个"
+          echo "组播地址: $(grep -c -E "rtp://|udp://" "tv/shanxi_iptv.txt") 个"
+          echo "总山西相关: $(grep -c -i "山西" "tv/shanxi_iptv.txt") 个"
+          
+          echo ""
+          echo "📺 内容预览 (前15行):"
+          echo "----------------------------------------"
+          head -15 "tv/shanxi_iptv.txt"
+          echo "----------------------------------------"
+          
+          echo ""
+          echo "📡 组播地址示例:"
+          grep -E "rtp://|udp://" "tv/shanxi_iptv.txt" | head -5 || echo "未找到组播地址"
+          
         else
-          echo "❌ 目标文件不存在"
+          echo "❌ 山西IPTV文件不存在"
         fi
         
         echo ""
-        echo "🔍 网络诊断建议:"
-        echo "1. 手动访问: https://my9.ltd/tv/pllive.txt"
-        echo "2. 检查是否被服务器屏蔽"
-        echo "3. 尝试不同的User-Agent"
-        echo "4. 考虑使用代理服务器"
+        echo "🔍 过滤规则说明:"
+        echo "1. 优先抓取 '山西联通'、'山西电信' 相关频道"
+        echo "2. 抓取所有组播地址 (rtp://, udp://)"
+        echo "3. 抓取所有包含 '山西'、'shanxi' 关键词的频道"
+        echo "4. 自动去重和清理空行"
         
         echo ""
-        echo "⏰ 下次自动执行: 每天 UTC 22:00 (北京时间 06:00)"
+        echo "⏰ 下次自动执行: 每天 UTC 01:10 和 09:10 (北京时间 09:10 和 17:10)"
