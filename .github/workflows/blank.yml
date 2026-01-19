@@ -1,4 +1,4 @@
-name: Update Shanxi TV Sources
+name: Update Shanxi TV Source File
 
 on:
   schedule:
@@ -29,229 +29,395 @@ jobs:
         mkdir -p tv
         echo "创建 tv 目录..."
         
-    - name: Test URL with verbose output
-      run: |
-        echo "=== 测试URL访问 ==="
-        REMOTE_URL="https://my9.ltd/tv/pllive.txt"
-        
-        echo "1. 使用curl测试HTTP头:"
-        curl -I -L \
-          -H "User-Agent: Mozilla/5.0" \
-          --max-time 30 \
-          "$REMOTE_URL" 2>&1 | head -20 || echo "curl失败"
-          
-        echo ""
-        echo "2. 下载前10K测试内容:"
-        curl -s -L \
-          -H "User-Agent: curl/8.8.0" \
-          --max-time 30 \
-          --range 0-10240 \
-          "$REMOTE_URL" | head -c 500 && echo "..."
-          
-    - name: Download and filter Shanxi sources
+    - name: Download TV source file
       id: download
       run: |
-        echo "开始下载并过滤山西联通/电信组播源..."
+        echo "开始下载直播源文件..."
         
         REMOTE_URL="https://my9.ltd/tv/pllive.txt"
-        LOCAL_PATH="tv/shanxi_iptv.txt"
+        LOCAL_PATH="tv/pllive.txt"
         TEMP_FILE="pllive_temp.txt"
-        FILTERED_FILE="shanxi_filtered.txt"
+        SHANXI_PATH="tv/shanxi.txt"
         
         echo "目标URL: $REMOTE_URL"
         echo "保存路径: $LOCAL_PATH"
+        echo "山西频道路径: $SHANXI_PATH"
         
         # 清空临时文件
-        rm -f "$TEMP_FILE" "$FILTERED_FILE" "$LOCAL_PATH"
+        rm -f "$TEMP_FILE" "$LOCAL_PATH" "$SHANXI_PATH"
         
-        # 下载完整文件
+        # 下载原始文件
         echo ""
-        echo "=== 下载原始文件 ==="
-        curl -s -L \
-          -o "$TEMP_FILE" \
-          -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-          --max-time 60 \
-          "$REMOTE_URL"
+        echo "=== 开始下载 ==="
         
-        if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
-          FILE_SIZE=$(wc -c < "$TEMP_FILE")
-          echo "原始文件大小: $FILE_SIZE 字节"
-          echo "原始文件行数: $(wc -l < "$TEMP_FILE")"
-          
-          # 过滤山西联通和山西电信组播源
+        # 尝试多个User-Agent
+        USER_AGENTS=(
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          "curl/8.8.0"
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"
+        )
+        
+        DOWNLOAD_SUCCESS=false
+        
+        for UA in "${USER_AGENTS[@]}"; do
           echo ""
-          echo "=== 过滤山西联通/电信组播源 ==="
+          echo "尝试 User-Agent: $(echo $UA | cut -c1-40)..."
           
-          # 创建文件头
-          echo "# Shanxi IPTV Group Channels" > "$FILTERED_FILE"
-          echo "# 山西联通/电信组播源" >> "$FILTERED_FILE"
-          echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$FILTERED_FILE"
-          echo "# 数据来源: $REMOTE_URL" >> "$FILTERED_FILE"
-          echo "" >> "$FILTERED_FILE"
-          
-          # 1. 首先抓取明显的山西相关频道（包含频道名）
-          echo "# 山西联通" >> "$FILTERED_FILE"
-          grep -E -i "山西.*联通|联通.*山西|shanxi.*unicom" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
-          
-          echo "" >> "$FILTERED_FILE"
-          echo "# 山西电信" >> "$FILTERED_FILE"
-          grep -E -i "山西.*电信|电信.*山西|shanxi.*telecom" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
-          
-          echo "" >> "$FILTERED_FILE"
-          echo "# 山西移动" >> "$FILTERED_FILE"
-          grep -E -i "山西.*移动|移动.*山西|shanxi.*mobile" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
-          
-          echo "" >> "$FILTERED_FILE"
-          echo "# 山西组播地址 (rtp/udp)" >> "$FILTERED_FILE"
-          
-          # 2. 抓取组播地址 (rtp://, udp://)
-          # 先抓取可能包含山西的组播行
-          grep -E -B1 -A0 "rtp://.*山西|udp://.*山西|rtp://.*239\..*山西|udp://.*239\..*山西" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
-          
-          # 3. 抓取所有山西相关的行（宽泛匹配）
-          echo "" >> "$FILTERED_FILE"
-          echo "# 其他山西相关频道" >> "$FILTERED_FILE"
-          grep -E -i "山西|sx-|shanxi" "$TEMP_FILE" >> "$FILTERED_FILE" 2>/dev/null || true
-          
-          # 4. 专门抓取组播地址段 (239.开头的IP)
-          echo "" >> "$FILTERED_FILE"
-          echo "# 组播地址段 (可能需要根据山西网络配置)" >> "$FILTERED_FILE"
-          grep -E -B1 "rtp://239\.|udp://239\.|rtp://232\.|udp://232\." "$TEMP_FILE" | head -50 >> "$FILTERED_FILE" 2>/dev/null || true
-          
-          # 去重和清理
-          echo ""
-          echo "=== 清理和去重 ==="
-          sort -u "$FILTERED_FILE" -o "$FILTERED_FILE.tmp"
-          mv "$FILTERED_FILE.tmp" "$LOCAL_PATH"
-          
-          # 移除完全空的行
-          sed -i '/^$/d' "$LOCAL_PATH"
-          
-          # 统计结果
-          FILTERED_SIZE=$(wc -c < "$LOCAL_PATH")
-          FILTERED_LINES=$(wc -l < "$LOCAL_PATH")
-          
-          echo "过滤后文件大小: $FILTERED_SIZE 字节"
-          echo "过滤后行数: $FILTERED_LINES 行"
-          
-          if [ $FILTERED_LINES -gt 5 ]; then
-            echo "✅ 成功过滤出山西相关频道"
-            echo "downloaded=true" >> $GITHUB_OUTPUT
-            echo "filtered_lines=$FILTERED_LINES" >> $GITHUB_OUTPUT
+          curl -s -L \
+            -o "$TEMP_FILE" \
+            -H "User-Agent: $UA" \
+            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: zh-CN,zh;q=0.9" \
+            --max-time 60 \
+            --retry 2 \
+            "$REMOTE_URL"
             
-            # 显示过滤出的频道类型统计
-            echo ""
-            echo "=== 频道类型统计 ==="
-            echo "山西联通: $(grep -c -i "联通" "$LOCAL_PATH") 个"
-            echo "山西电信: $(grep -c -i "电信" "$LOCAL_PATH") 个"
-            echo "山西移动: $(grep -c -i "移动" "$LOCAL_PATH") 个"
-            echo "组播地址: $(grep -c -E "rtp://|udp://" "$LOCAL_PATH") 个"
-            echo "总山西相关: $(grep -c -i "山西" "$LOCAL_PATH") 个"
+          if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+            FILE_SIZE=$(wc -c < "$TEMP_FILE")
+            echo "下载大小: $FILE_SIZE 字节"
             
-          else
-            echo "⚠️ 过滤出的内容太少，尝试备用方法"
-            
-            # 备用方法：抓取所有组播源
-            echo ""
-            echo "=== 备用方法：抓取所有组播源 ==="
-            echo "# 全部组播源 (备用)" > "$LOCAL_PATH"
-            echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$LOCAL_PATH"
-            echo "" >> "$LOCAL_PATH"
-            
-            # 抓取所有组播地址
-            grep -E -B1 "rtp://|udp://" "$TEMP_FILE" | head -100 >> "$LOCAL_PATH" 2>/dev/null || true
-            
-            ALTERNATIVE_LINES=$(wc -l < "$LOCAL_PATH")
-            echo "备用方法行数: $ALTERNATIVE_LINES 行"
-            
-            if [ $ALTERNATIVE_LINES -gt 10 ]; then
-              echo "✅ 备用方法成功"
-              echo "downloaded=true" >> $GITHUB_OUTPUT
-              echo "filtered_lines=$ALTERNATIVE_LINES" >> $GITHUB_OUTPUT
-              echo "method=alternative_all_multicast" >> $GITHUB_OUTPUT
+            if [ $FILE_SIZE -gt 10000 ]; then  # 文件应该比较大
+              echo "✅ 下载成功"
+              mv "$TEMP_FILE" "$LOCAL_PATH"
+              DOWNLOAD_SUCCESS=true
+              echo "method=$(echo $UA | cut -d' ' -f1 | tr -d '()')" >> $GITHUB_OUTPUT
+              break
             else
-              echo "❌ 所有方法都失败"
-              echo "downloaded=false" >> $GITHUB_OUTPUT
+              echo "⚠️ 文件太小，重试..."
+              rm -f "$TEMP_FILE"
             fi
           fi
-          
-          # 清理临时文件
-          rm -f "$TEMP_FILE" "$FILTERED_FILE"
-          
-        else
-          echo "❌ 文件下载失败"
-          echo "downloaded=false" >> $GITHUB_OUTPUT
-          
+          sleep 2
+        done
+        
+        if [ "$DOWNLOAD_SUCCESS" = false ]; then
+          echo "❌ 所有下载方法都失败"
           # 创建占位文件
-          echo "# 山西IPTV组播源" > "$LOCAL_PATH"
-          echo "# 文件下载失败 - $(date '+%Y-%m-%d %H:%M:%S UTC')" >> "$LOCAL_PATH"
-          echo "# 原始URL: $REMOTE_URL" >> "$LOCAL_PATH"
+          echo "# 直播源文件下载失败 - $(date)" > "$LOCAL_PATH"
+          echo "# 请检查URL: $REMOTE_URL" >> "$LOCAL_PATH"
+          echo "method=failed" >> $GITHUB_OUTPUT
         fi
         
-    - name: Check if file changed
+        echo "downloaded=true" >> $GITHUB_OUTPUT
+        
+    - name: Extract Shanxi channels
+      id: extract-shanxi
+      if: steps.download.outputs.downloaded == 'true'
+      run: |
+        echo "开始筛选山西省频道..."
+        
+        SOURCE_FILE="tv/pllive.txt"
+        SHANXI_FILE="tv/shanxi.txt"
+        
+        if [ ! -f "$SOURCE_FILE" ] || [ ! -s "$SOURCE_FILE" ]; then
+          echo "❌ 源文件不存在或为空"
+          echo "shanxi_channels=0" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        # 清空山西频道文件
+        > "$SHANXI_FILE"
+        
+        # 添加文件头部信息
+        echo "# Shanxi TV Channels" >> "$SHANXI_FILE"
+        echo "# Extracted from: pllive.txt" >> "$SHANXI_FILE"
+        echo "# Date: $(date '+%Y-%m-%d %H:%M:%S')" >> "$SHANXI_FILE"
+        echo "#" >> "$SHANXI_FILE"
+        
+        # 定义筛选关键词（不区分大小写）
+        SHANXI_KEYWORDS=(
+          "山西"
+          "太原"
+          "大同"
+          "朔州"
+          "忻州"
+          "阳泉"
+          "吕梁"
+          "晋中"
+          "长治"
+          "晋城"
+          "临汾"
+          "运城"
+        )
+        
+        # 央视相关关键词
+        CCTV_KEYWORDS=(
+          "CCTV"
+          "央视"
+          "中央"
+        )
+        
+        # 卫视关键词
+        SATELLITE_KEYWORDS=(
+          "卫视"
+          "卫视高清"
+          "卫视标清"
+        )
+        
+        # 组播关键词
+        MULTICAST_KEYWORDS=(
+          "rtp://"
+          "udp://"
+          "@239"
+          "山西联通"
+          "山西电信"
+          "山西移动"
+          "unicom"
+          "telecom"
+          "移动"
+          "联通"
+          "电信"
+        )
+        
+        # 计数器
+        CCTV_COUNT=0
+        SATELLITE_COUNT=0
+        SHANXI_LOCAL_COUNT=0
+        MULTICAST_COUNT=0
+        OTHER_COUNT=0
+        
+        # 处理文件，按行读取
+        while IFS= read -r line; do
+          # 跳过空行和注释
+          if [[ -z "$line" ]] || [[ "$line" == \#* ]]; then
+            echo "$line" >> "$SHANXI_FILE"
+            continue
+          fi
+            
+          # 统一转换为大写进行比较（不区分大小写）
+          line_upper=$(echo "$line" | tr '[:lower:]' '[:upper:]')
+          
+          # 检查是否为山西相关频道
+          is_shanxi=false
+          for keyword in "${SHANXI_KEYWORDS[@]}"; do
+            keyword_upper=$(echo "$keyword" | tr '[:lower:]' '[:upper:]')
+            if [[ "$line_upper" == *"$keyword_upper"* ]]; then
+              is_shanxi=true
+              break
+            fi
+          done
+          
+          # 如果是山西相关，再分类
+          if [ "$is_shanxi" = true ]; then
+            # 检查是否为央视
+            is_cctv=false
+            for keyword in "${CCTV_KEYWORDS[@]}"; do
+              keyword_upper=$(echo "$keyword" | tr '[:lower:]' '[:upper:]')
+              if [[ "$line_upper" == *"$keyword_upper"* ]]; then
+                is_cctv=true
+                break
+              fi
+            done
+            
+            # 检查是否为卫视
+            is_satellite=false
+            for keyword in "${SATELLITE_KEYWORDS[@]}"; do
+              keyword_upper=$(echo "$keyword" | tr '[:lower:]' '[:upper:]')
+              if [[ "$line_upper" == *"$keyword_upper"* ]]; then
+                is_satellite=true
+                break
+              fi
+            done
+            
+            # 检查是否为组播
+            is_multicast=false
+            for keyword in "${MULTICAST_KEYWORDS[@]}"; do
+              keyword_upper=$(echo "$keyword" | tr '[:lower:]' '[:upper:]')
+              if [[ "$line_upper" == *"$keyword_upper"* ]]; then
+                is_multicast=true
+                break
+              fi
+            done
+            
+            # 分类计数
+            if [ "$is_cctv" = true ]; then
+              CCTV_COUNT=$((CCTV_COUNT + 1))
+              echo "# CCTV山西源" >> "$SHANXI_FILE"
+            elif [ "$is_satellite" = true ]; then
+              SATELLITE_COUNT=$((SATELLITE_COUNT + 1))
+              echo "# 卫视山西源" >> "$SHANXI_FILE"
+            elif [ "$is_multicast" = true ]; then
+              MULTICAST_COUNT=$((MULTICAST_COUNT + 1))
+              echo "# 山西组播" >> "$SHANXI_FILE"
+            else
+              SHANXI_LOCAL_COUNT=$((SHANXI_LOCAL_COUNT + 1))
+              echo "# 山西地方台" >> "$SHANXI_FILE"
+            fi
+            
+            echo "$line" >> "$SHANXI_FILE"
+            
+          # 如果不是山西相关，但包含组播地址也保留（山西联通/电信组播）
+          elif [[ "$line" == rtp://* ]] || [[ "$line" == udp://* ]] || [[ "$line_upper" == *239* ]]; then
+            # 检查是否包含山西关键词
+            is_shanxi_multicast=false
+            for keyword in "${SHANXI_KEYWORDS[@]}"; do
+              keyword_upper=$(echo "$keyword" | tr '[:lower:]' '[:upper:]')
+              if [[ "$line_upper" == *"$keyword_upper"* ]]; then
+                is_shanxi_multicast=true
+                break
+              fi
+            done
+            
+            if [ "$is_shanxi_multicast" = true ]; then
+              MULTICAST_COUNT=$((MULTICAST_COUNT + 1))
+              echo "# 山西组播" >> "$SHANXI_FILE"
+              echo "$line" >> "$SHANXI_FILE"
+            fi
+          fi
+        done < "$SOURCE_FILE"
+        
+        # 添加分类统计
+        echo "" >> "$SHANXI_FILE"
+        echo "# 频道统计" >> "$SHANXI_FILE"
+        echo "# 央视山西源: $CCTV_COUNT" >> "$SHANXI_FILE"
+        echo "# 卫视山西源: $SATELLITE_COUNT" >> "$SHANXI_FILE"
+        echo "# 山西地方台: $SHANXI_LOCAL_COUNT" >> "$SHANXI_FILE"
+        echo "# 山西组播源: $MULTICAST_COUNT" >> "$SHANXI_FILE"
+        echo "# 总计: $((CCTV_COUNT + SATELLITE_COUNT + SHANXI_LOCAL_COUNT + MULTICAST_COUNT))" >> "$SHANXI_FILE"
+        
+        TOTAL_CHANNELS=$((CCTV_COUNT + SATELLITE_COUNT + SHANXI_LOCAL_COUNT + MULTICAST_COUNT))
+        
+        echo "✅ 筛选完成"
+        echo "源文件大小: $(wc -l < "$SOURCE_FILE") 行"
+        echo "山西频道数: $TOTAL_CHANNELS 个"
+        echo "  - 央视山西源: $CCTV_COUNT"
+        echo "  - 卫视山西源: $SATELLITE_COUNT"
+        echo "  - 山西地方台: $SHANXI_LOCAL_COUNT"
+        echo "  - 山西组播源: $MULTICAST_COUNT"
+        
+        echo "shanxi_channels=$TOTAL_CHANNELS" >> $GITHUB_OUTPUT
+        echo "shanxi_cctv=$CCTV_COUNT" >> $GITHUB_OUTPUT
+        echo "shanxi_satellite=$SATELLITE_COUNT" >> $GITHUB_OUTPUT
+        echo "shanxi_local=$SHANXI_LOCAL_COUNT" >> $GITHUB_OUTPUT
+        echo "shanxi_multicast=$MULTICAST_COUNT" >> $GITHUB_OUTPUT
+        
+    - name: Check if files changed
       id: check-change
       if: steps.download.outputs.downloaded == 'true'
       run: |
         echo "检查文件变化..."
         
-        FILE_PATH="tv/shanxi_iptv.txt"
+        CHANGED_FILES=()
         
-        if [ ! -f "$FILE_PATH" ]; then
-          echo "❌ 文件不存在"
-          echo "has_change=false" >> $GITHUB_OUTPUT
-          exit 0
+        # 检查原始文件
+        if [ -f "tv/pllive.txt" ]; then
+          if git diff --quiet "tv/pllive.txt" 2>/dev/null; then
+            echo "原始文件无变化"
+          else
+            echo "原始文件有变化"
+            CHANGED_FILES+=("tv/pllive.txt")
+          fi
         fi
         
-        # 使用简单的大小比较
-        CURRENT_SIZE=$(wc -c < "$FILE_PATH" 2>/dev/null || echo 0)
-        echo "当前文件大小: $CURRENT_SIZE 字节"
-        echo "当前文件行数: $(wc -l < "$FILE_PATH") 行"
-        
-        if git ls-files "$FILE_PATH" >/dev/null 2>&1; then
-          # 获取Git中的文件大小
-          GIT_SIZE=$(git cat-file -s :"$FILE_PATH" 2>/dev/null || echo 0)
-          echo "Git中文件大小: $GIT_SIZE 字节"
-          
-          if [ $CURRENT_SIZE -eq $GIT_SIZE ] && [ $CURRENT_SIZE -gt 10 ]; then
-            # 如果大小相同且文件合理，进一步检查内容
-            CURRENT_HASH=$(md5sum "$FILE_PATH" | cut -d' ' -f1)
-            GIT_HASH=$(git hash-object "$FILE_PATH")
-            
-            if [ "$CURRENT_HASH" = "$GIT_HASH" ]; then
-              echo "文件无变化"
-              echo "has_change=false" >> $GITHUB_OUTPUT
-            else
-              echo "检测到文件变化 (哈希不同)"
-              echo "has_change=true" >> $GITHUB_OUTPUT
-            fi
-          elif [ $CURRENT_SIZE -ne $GIT_SIZE ]; then
-            echo "检测到文件变化 (大小不同)"
-            echo "has_change=true" >> $GITHUB_OUTPUT
+        # 检查山西频道文件
+        if [ -f "tv/shanxi.txt" ]; then
+          if git diff --quiet "tv/shanxi.txt" 2>/dev/null; then
+            echo "山西频道文件无变化"
           else
-            echo "文件可能为空或无效"
-            echo "has_change=false" >> $GITHUB_OUTPUT
+            echo "山西频道文件有变化"
+            CHANGED_FILES+=("tv/shanxi.txt")
           fi
+        fi
+        
+        if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
+          echo "没有文件变化"
+          echo "has_change=false" >> $GITHUB_OUTPUT
         else
-          echo "文件未被Git跟踪，是新文件"
+          echo "检测到文件变化: ${CHANGED_FILES[*]}"
           echo "has_change=true" >> $GITHUB_OUTPUT
         fi
         
     - name: Commit and push changes
       if: steps.check-change.outputs.has_change == 'true'
       run: |
-        echo "准备提交山西IPTV文件..."
+        echo "准备提交文件..."
         
-        FILE_PATH="tv/shanxi_iptv.txt"
+        # 添加所有变化的文件
+        git add tv/
         
-        if [ ! -f "$FILE_PATH" ]; then
-          echo "❌ 文件不存在，无法提交"
-          exit 1
+        # 获取统计信息
+        TOTAL_CHANNELS="${{ steps.extract-shanxi.outputs.shanxi_channels }}"
+        CCTV_COUNT="${{ steps.extract-shanxi.outputs.shanxi_cctv }}"
+        SATELLITE_COUNT="${{ steps.extract-shanxi.outputs.shanxi_satellite }}"
+        LOCAL_COUNT="${{ steps.extract-shanxi.outputs.shanxi_local }}"
+        MULTICAST_COUNT="${{ steps.extract-shanxi.outputs.shanxi_multicast }}"
+        METHOD="${{ steps.download.outputs.method }}"
+        
+        # 提交信息
+        COMMIT_MSG="📺 更新山西直播源 - $(date '+%Y-%m-%d %H:%M UTC')"
+        COMMIT_MSG="$COMMIT_MSG | 总计: ${TOTAL_CHANNELS}频道"
+        
+        if [ -n "$CCTV_COUNT" ] && [ "$CCTV_COUNT" != "" ]; then
+          COMMIT_MSG="$COMMIT_MSG (央视${CCTV_COUNT}/卫视${SATELLITE_COUNT}/地方${LOCAL_COUNT}/组播${MULTICAST_COUNT})"
         fi
         
-        FILE_SIZE=$(wc -c < "$FILE_PATH")
-        FILE_LINES=$(wc -l < "$FILE_PATH" 2>/dev/null || echo 0)
-        FILE_MD5=$(md5sum "$FILE_PATH" | cut -d' ' -f1 2>/dev/null || echo "unknown")
+        COMMIT_MSG="$COMMIT_MSG | 方法: ${METHOD}"
         
+        git commit -m "$COMMIT_MSG"
+        
+        echo "推送到GitHub..."
+        git push
+        
+        echo "✅ 提交并推送完成"
+        
+    - name: Show detailed final status
+      run: |
+        echo "=========================================="
+        echo "          山西频道筛选报告"
+        echo "=========================================="
+        
+        echo "执行完成时间: $(date '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "对应北京时间: $(date -d '+8 hours' '+%Y-%m-%d %H:%M:%S')"
+        
+        echo ""
+        echo "📁 文件列表:"
+        ls -lh tv/*.txt 2>/dev/null || echo "没有tv目录"
+        
+        echo ""
+        if [ -f "tv/pllive.txt" ]; then
+          echo "📦 原始文件信息:"
+          ORIG_SIZE=$(wc -c < "tv/pllive.txt")
+          ORIG_LINES=$(wc -l < "tv/pllive.txt" 2>/dev/null || echo "0")
+          echo "大小: $ORIG_SIZE 字节, 行数: $ORIG_LINES"
+        fi
+        
+        echo ""
+        if [ -f "tv/shanxi.txt" ]; then
+          echo "🏔️ 山西频道文件信息:"
+          SHANXI_SIZE=$(wc -c < "tv/shanxi.txt")
+          SHANXI_LINES=$(wc -l < "tv/shanxi.txt" 2>/dev/null || echo "0")
+          echo "大小: $SHANXI_SIZE 字节, 行数: $SHANXI_LINES"
+          
+          echo ""
+          echo "📊 频道分类预览:"
+          echo "----------------------------------------"
+          
+          # 显示各分类示例
+          for category in "CCTV山西源" "卫视山西源" "山西地方台" "山西组播"; do
+            echo "【$category】:"
+            grep -A1 "# $category" "tv/shanxi.txt" | head -4 | grep -v "^# " | head -2
+            echo ""
+          done
+          
+          echo "----------------------------------------"
+          
+          # 显示统计信息
+          echo ""
+          echo "🔢 详细统计:"
+          grep "^# 频道统计" -A5 "tv/shanxi.txt" | tail -5
+        else
+          echo "❌ 山西频道文件未生成"
+        fi
+        
+        echo ""
+        echo "🔍 关键词筛选说明:"
+        echo "1. 山西地区: 山西、太原、大同、朔州、忻州、阳泉、吕梁、晋中、长治、晋城、临汾、运城"
+        echo "2. 央视: CCTV、央视、中央"
+        echo "3. 卫视: 卫视、卫视高清、卫视标清"
+        echo "4. 组播: rtp://、udp://、@239、山西联通、山西电信、山西移动"
+        
+        echo ""
+        echo "⏰ 下次自动执行: UTC 01:10 和 09:10 (北京时间 09:10 和 17:10)"        
         # 统计各类频道数量
         UNICOM_COUNT=$(grep -c -i "联通" "$FILE_PATH" 2>/dev/null || echo 0)
         TELECOM_COUNT=$(grep -c -i "电信" "$FILE_PATH" 2>/dev/null || echo 0)
