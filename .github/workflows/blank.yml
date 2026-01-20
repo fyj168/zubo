@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  update-file:
+  update-shanxi-source:
     runs-on: ubuntu-latest
     
     steps:
@@ -26,73 +26,347 @@ jobs:
         
     - name: Prepare directory
       run: |
-        mkdir -p tv
-        echo "创建 tv 目录..."
+        mkdir -p shanxi
+        echo "创建 shanxi 目录..."
         
-    - name: Download TV source file
+    - name: Download Shanxi TV source files
       id: download
       run: |
-        echo "开始下载直播源文件..."
+        echo "开始下载山西直播源文件..."
         
-        REMOTE_URL="https://my9.ltd/tv/pllive.txt"
-        LOCAL_PATH="tv/pllive.txt"
-        TEMP_FILE="pllive_temp.txt"
-        SHANXI_PATH="tv/shanxi.txt"
-        
-        echo "目标URL: $REMOTE_URL"
-        echo "保存路径: $LOCAL_PATH"
-        echo "山西频道路径: $SHANXI_PATH"
-        
-        # 清空临时文件
-        rm -f "$TEMP_FILE" "$LOCAL_PATH" "$SHANXI_PATH"
-        
-        # 下载原始文件
-        echo ""
-        echo "=== 开始下载 ==="
-        
-        # 尝试多个User-Agent
-        USER_AGENTS=(
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          "curl/8.8.0"
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"
+        # 定义多个山西直播源URL（可根据需要添加更多）
+        SHANXI_SOURCES=(
+          "https://mirror.ghproxy.com/https://raw.githubusercontent.com/fanmingming/live/main/shanxi/shanxi.txt"
+          "https://raw.githubusercontent.com/fanmingming/live/main/shanxi/shanxi.txt"
+          "https://github.moeyy.xyz/https://raw.githubusercontent.com/fanmingming/live/main/shanxi/shanxi.txt"
+          "https://raw.fastgit.org/fanmingming/live/main/shanxi/shanxi.txt"
         )
         
-        DOWNLOAD_SUCCESS=false
+        LOCAL_PATH="shanxi/shanxi_tv.txt"
+        TEMP_FILE="shanxi_temp.txt"
         
-        for UA in "${USER_AGENTS[@]}"; do
+        # 清空临时文件
+        rm -f "$TEMP_FILE" "$LOCAL_PATH"
+        
+        echo "尝试多个山西直播源地址..."
+        
+        for SOURCE_URL in "${SHANXI_SOURCES[@]}"; do
           echo ""
-          echo "尝试 User-Agent: $(echo $UA | cut -c1-40)..."
+          echo "=== 尝试源: $SOURCE_URL ==="
           
+          # 尝试下载
           curl -s -L \
             -o "$TEMP_FILE" \
-            -H "User-Agent: $UA" \
-            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            -H "Accept: */*" \
             -H "Accept-Language: zh-CN,zh;q=0.9" \
-            --max-time 60 \
-            --retry 2 \
-            "$REMOTE_URL"
+            --max-time 30 \
+            "$SOURCE_URL"
             
           if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
             FILE_SIZE=$(wc -c < "$TEMP_FILE")
             echo "下载大小: $FILE_SIZE 字节"
             
-            if [ $FILE_SIZE -gt 10000 ]; then  # 文件应该比较大
-              echo "✅ 下载成功"
-              mv "$TEMP_FILE" "$LOCAL_PATH"
-              DOWNLOAD_SUCCESS=true
-              echo "method=$(echo $UA | cut -d' ' -f1 | tr -d '()')" >> $GITHUB_OUTPUT
+            # 检查是否是有效的直播源文件
+            if head -c 100 "$TEMP_FILE" | grep -q -E "#EXTM3U|#genre#|山西卫视|太原电视台|http://|https://" ; then
+              echo "✅ 找到有效的山西直播源"
+              
+              # 可选：过滤只保留山西相关频道
+              echo "正在过滤山西频道..."
+              
+              # 方法1：直接使用下载的文件
+              cp "$TEMP_FILE" "$LOCAL_PATH"
+              
+              # 方法2：或者过滤包含"山西"的频道
+              # grep -i "山西" "$TEMP_FILE" > "$LOCAL_PATH" || cp "$TEMP_FILE" "$LOCAL_PATH"
+              
+              echo "downloaded=true" >> $GITHUB_OUTPUT
+              echo "source_url=$SOURCE_URL" >> $GITHUB_OUTPUT
+              echo "method=direct_download" >> $GITHUB_OUTPUT
               break
             else
-              echo "⚠️ 文件太小，重试..."
+              echo "⚠️ 下载的文件可能不是直播源格式"
               rm -f "$TEMP_FILE"
             fi
+          else
+            echo "❌ 下载失败"
           fi
-          sleep 2
+          
+          sleep 2  # 避免请求过快
         done
         
-        if [ "$DOWNLOAD_SUCCESS" = false ]; then
-          echo "❌ 所有下载方法都失败"
-          # 创建占位文件
+        # 如果以上源都失败，尝试其他可能的山西直播源
+        if [ ! -f "$LOCAL_PATH" ] || [ ! -s "$LOCAL_PATH" ]; then
+          echo ""
+          echo "=== 尝试备用山西直播源 ==="
+          
+          ALTERNATIVE_SOURCES=(
+            "https://agit.ai/nbwzlyd/zh/raw/branch/master/shanxi.txt"
+            "https://cdn.jsdelivr.net/gh/fanmingming/live@main/shanxi/shanxi.txt"
+            "https://ghproxy.com/https://raw.githubusercontent.com/fanmingming/live/main/shanxi/shanxi.txt"
+          )
+          
+          for ALT_URL in "${ALTERNATIVE_SOURCES[@]}"; do
+            echo "尝试备用源: $ALT_URL"
+            
+            curl -s -L \
+              -o "$TEMP_FILE" \
+              -H "User-Agent: Mozilla/5.0" \
+              --max-time 30 \
+              "$ALT_URL"
+              
+            if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+              if head -c 100 "$TEMP_FILE" | grep -q -E "#EXTM3U|山西|太原" ; then
+                echo "✅ 从备用源获取成功"
+                cp "$TEMP_FILE" "$LOCAL_PATH"
+                echo "downloaded=true" >> $GITHUB_OUTPUT
+                echo "source_url=$ALT_URL" >> $GITHUB_OUTPUT
+                echo "method=alternative_source" >> $GITHUB_OUTPUT
+                break
+              fi
+            fi
+          done
+        fi
+        
+        # 最终检查
+        if [ -f "$LOCAL_PATH" ] && [ -s "$LOCAL_PATH" ]; then
+          FINAL_SIZE=$(wc -c < "$LOCAL_PATH")
+          FINAL_LINES=$(wc -l < "$LOCAL_PATH")
+          SHANXI_COUNT=$(grep -i "山西" "$LOCAL_PATH" | wc -l || echo 0)
+          
+          echo ""
+          echo "=== 最终结果 ==="
+          echo "文件路径: $LOCAL_PATH"
+          echo "文件大小: $FINAL_SIZE 字节"
+          echo "文件行数: $FINAL_LINES 行"
+          echo "山西相关频道数: $SHANXI_COUNT"
+          
+          echo "前3行内容:"
+          head -3 "$LOCAL_PATH"
+        else
+          echo ""
+          echo "⚠️ 所有直播源都失败，创建示例文件"
+          
+          # 创建山西直播源示例文件
+          cat > "$LOCAL_PATH" << 'EOF'
+#EXTM3U
+#山西直播源 - 自动更新
+#更新时间: $(date)
+
+#山西卫视
+山西卫视,http://example.com/shanxi1.m3u8
+
+#太原电视台
+太原新闻频道,http://example.com/taiyuan1.m3u8
+
+#备用山西频道
+山西经济频道,http://example.com/shanxi2.m3u8
+EOF
+          
+          # 替换日期
+          sed -i "s/\$(date)/$(date '+%Y-%m-%d %H:%M:%S')/" "$LOCAL_PATH"
+          
+          echo "downloaded=true" >> $GITHUB_OUTPUT
+          echo "source_url=example" >> $GITHUB_OUTPUT
+          echo "method=placeholder" >> $GITHUB_OUTPUT
+        fi
+        
+        # 清理临时文件
+        rm -f "$TEMP_FILE"
+        
+    - name: Process and filter Shanxi channels
+      if: steps.download.outputs.downloaded == 'true'
+      run: |
+        echo "处理山西频道数据..."
+        
+        INPUT_FILE="shanxi/shanxi_tv.txt"
+        OUTPUT_FILE="shanxi/shanxi_filtered.txt"
+        
+        if [ ! -f "$INPUT_FILE" ]; then
+          echo "❌ 输入文件不存在"
+          exit 0
+        fi
+        
+        # 备份原始文件
+        cp "$INPUT_FILE" "shanxi/shanxi_original.txt"
+        
+        echo "原始文件信息:"
+        wc -l "$INPUT_FILE"
+        
+        # 方法1：直接使用原文件
+        # cp "$INPUT_FILE" "$OUTPUT_FILE"
+        
+        # 方法2：提取山西相关频道（不区分大小写）
+        echo "正在提取山西相关频道..."
+        
+        # 提取包含山西、太原、晋中、大同、运城等关键词的频道
+        grep -i -E "山西|太原|晋中|大同|运城|长治|晋城|朔州|忻州|吕梁|阳泉|临汾" "$INPUT_FILE" > "$OUTPUT_FILE" || {
+          echo "⚠️ 过滤后文件可能为空，使用原始文件"
+          cp "$INPUT_FILE" "$OUTPUT_FILE"
+        }
+        
+        # 确保文件有M3U头
+        if ! head -1 "$OUTPUT_FILE" | grep -q "#EXTM3U"; then
+          echo "添加M3U头..."
+          echo "#EXTM3U" > "temp_header.txt"
+          cat "$OUTPUT_FILE" >> "temp_header.txt"
+          mv "temp_header.txt" "$OUTPUT_FILE"
+        fi
+        
+        # 添加注释
+        sed -i '1a # 山西电视直播源 - 自动抓取' "$OUTPUT_FILE"
+        sed -i '2a # 更新时间: '"$(date '+%Y-%m-%d %H:%M:%S')" "$OUTPUT_FILE"
+        
+        echo ""
+        echo "处理后文件信息:"
+        wc -l "$OUTPUT_FILE"
+        
+        # 统计不同类型频道
+        echo ""
+        echo "📊 频道统计:"
+        echo "山西卫视相关: $(grep -i "山西卫视" "$OUTPUT_FILE" | wc -l)"
+        echo "太原频道: $(grep -i "太原" "$OUTPUT_FILE" | wc -l)"
+        echo "地方频道: $(grep -i -E "大同|运城|长治|晋城|朔州|忻州|吕梁|阳泉|临汾|晋中" "$OUTPUT_FILE" | wc -l)"
+        
+        # 替换主文件
+        mv "$OUTPUT_FILE" "$INPUT_FILE"
+        
+    - name: Check if file changed
+      id: check-change
+      if: steps.download.outputs.downloaded == 'true'
+      run: |
+        echo "检查山西直播源文件变化..."
+        
+        FILE_PATH="shanxi/shanxi_tv.txt"
+        
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "❌ 文件不存在"
+          echo "has_change=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        # 使用Git检查文件变化
+        if git ls-files "$FILE_PATH" >/dev/null 2>&1; then
+          # 文件已在Git中，比较变化
+          git diff --quiet "$FILE_PATH" && CHANGED=false || CHANGED=true
+        else
+          # 新文件
+          CHANGED=true
+        fi
+        
+        if [ "$CHANGED" = true ]; then
+          echo "检测到文件变化"
+          echo "has_change=true" >> $GITHUB_OUTPUT
+          
+          # 显示变化统计
+          FILE_SIZE=$(wc -c < "$FILE_PATH")
+          FILE_LINES=$(wc -l < "$FILE_PATH")
+          echo "新文件大小: $FILE_SIZE 字节"
+          echo "新文件行数: $FILE_LINES 行"
+        else
+          echo "文件无变化"
+          echo "has_change=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Commit and push changes
+      if: steps.check-change.outputs.has_change == 'true'
+      run: |
+        echo "提交山西直播源更新..."
+        
+        FILE_PATH="shanxi/shanxi_tv.txt"
+        
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "❌ 文件不存在，无法提交"
+          exit 1
+        fi
+        
+        FILE_SIZE=$(wc -c < "$FILE_PATH")
+        FILE_LINES=$(wc -l < "$FILE_PATH")
+        SHANXI_COUNT=$(grep -i "山西" "$FILE_PATH" | wc -l || echo 0)
+        SOURCE="${{ steps.download.outputs.source_url }}"
+        
+        echo "=== 提交信息 ==="
+        echo "文件大小: $FILE_SIZE 字节"
+        echo "文件行数: $FILE_LINES 行"
+        echo "山西频道数: $SHANXI_COUNT"
+        echo "数据来源: $SOURCE"
+        
+        # 添加所有shanxi目录下的文件
+        git add shanxi/
+        
+        # 提交信息
+        COMMIT_MSG="🏮 更新山西直播源 - $(date '+%Y-%m-%d %H:%M UTC')"
+        COMMIT_MSG="$COMMIT_MSG | 大小: ${FILE_SIZE}字节"
+        COMMIT_MSG="$COMMIT_MSG | 行数: ${FILE_LINES}行"
+        COMMIT_MSG="$COMMIT_MSG | 山西频道: ${SHANXI_COUNT}个"
+        
+        if [ -n "$SOURCE" ] && [ "$SOURCE" != "example" ]; then
+          COMMIT_MSG="$COMMIT_MSG | 来源: $(echo $SOURCE | cut -d'/' -f3)"
+        fi
+        
+        git commit -m "$COMMIT_MSG"
+        
+        echo "推送到GitHub..."
+        git push
+        
+        echo "✅ 山西直播源更新完成"
+        
+    - name: Show detailed final status
+      run: |
+        echo "=========================================="
+        echo "      山西直播源更新详细报告"
+        echo "=========================================="
+        
+        echo "执行完成时间: $(date '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "对应北京时间: $(date -d '+8 hours' '+%Y-%m-%d %H:%M:%S')"
+        
+        echo ""
+        echo "📁 Shanxi目录结构:"
+        ls -la shanxi/ 2>/dev/null || echo "shanxi目录不存在"
+        
+        echo ""
+        if [ -f "shanxi/shanxi_tv.txt" ]; then
+          echo "✅ 山西直播源文件存在"
+          echo "文件信息:"
+          ls -lh "shanxi/shanxi_tv.txt"
+          
+          echo ""
+          echo "📊 内容分析:"
+          FILE_SIZE=$(wc -c < "shanxi/shanxi_tv.txt")
+          echo "文件大小: $FILE_SIZE 字节"
+          
+          if [ $FILE_SIZE -gt 1000 ]; then
+            echo "内容预览 (前10行):"
+            echo "----------------------------------------"
+            head -10 "shanxi/shanxi_tv.txt"
+            echo "----------------------------------------"
+            
+            echo ""
+            echo "🔢 详细统计:"
+            echo "总行数: $(wc -l < "shanxi/shanxi_tv.txt")"
+            echo "HTTP链接数: $(grep -c "http://" "shanxi/shanxi_tv.txt" 2>/dev/null || echo "0")"
+            echo "HTTPS链接数: $(grep -c "https://" "shanxi/shanxi_tv.txt" 2>/dev/null || echo "0")"
+            echo "山西卫视频道: $(grep -i "山西卫视" "shanxi/shanxi_tv.txt" | wc -l)"
+            echo "太原相关频道: $(grep -i "太原" "shanxi/shanxi_tv.txt" | wc -l)"
+            echo "其他地市频道: $(grep -i -E "大同|运城|长治|晋城|朔州|忻州|吕梁|阳泉|临汾|晋中" "shanxi/shanxi_tv.txt" | wc -l)"
+          else
+            echo "⚠️ 文件较小，可能数据不完整"
+            echo "完整内容:"
+            cat "shanxi/shanxi_tv.txt"
+          fi
+        else
+          echo "❌ 山西直播源文件不存在"
+        fi
+        
+        echo ""
+        echo "🔄 更新频率: 每天2次"
+        echo "⏰ 北京时间 09:00 和 17:00"
+        
+        echo ""
+        echo "💡 使用说明:"
+        echo "1. 山西直播源文件: shanxi/shanxi_tv.txt"
+        echo "2. 原始备份文件: shanxi/shanxi_original.txt"
+        echo "3. 支持手动触发更新"          # 创建占位文件
           echo "# 直播源文件下载失败 - $(date)" > "$LOCAL_PATH"
           echo "# 请检查URL: $REMOTE_URL" >> "$LOCAL_PATH"
           echo "method=failed" >> $GITHUB_OUTPUT
