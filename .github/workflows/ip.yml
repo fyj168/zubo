@@ -25,11 +25,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      -- name: Install ffmpeg
-         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # ❗ 这里修正了：原来写了 "-- name" 导致语法错误，现改为正确的 "- name"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run fofa_fetch.py
         run: python fofa_fetch.py
+        env:
+          # 请确保在 GitHub Secrets 中配置了 FOFA_EMAIL 和 FOFA_KEY
+          FOFA_EMAIL: ${{ secrets.FOFA_EMAIL }}
+          FOFA_KEY: ${{ secrets.FOFA_KEY }}
 
       - name: Commit and push changes
         run: |
