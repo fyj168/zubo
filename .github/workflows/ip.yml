@@ -25,8 +25,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      -- name: Install ffmpeg
+         run: 
+           sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run fofa_fetch.py
         run: python fofa_fetch.py
