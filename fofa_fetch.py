@@ -2,14 +2,13 @@ import os
 import re
 import requests
 import time
-import socket          # 👈 新增
+import socket
 import concurrent.futures
 import subprocess
 from datetime import datetime, timezone, timedelta
 
 # ===============================
 # 配置区
-# 注意：不再使用网页爬取，改用 FOFA API
 FOFA_EMAIL = os.getenv("FOFA_EMAIL")
 FOFA_KEY = os.getenv("FOFA_KEY")
 QUERY_BASE64 = "InVkcHh5IiAmJiBjb3VudHJ5PSJDTiI%3D"   # 查询 udpxy && country="CN"
@@ -58,7 +57,6 @@ CHANNEL_CATEGORIES = {
     ],
 }
 
-# ===== 映射（别名 -> 标准名） =====
 CHANNEL_MAPPING = {
     "CCTV1": ["CCTV-1", "CCTV-1 HD", "CCTV1 HD", "CCTV-1综合"],
     "CCTV2": ["CCTV-2", "CCTV-2 HD", "CCTV2 HD", "CCTV-2财经"],
@@ -160,7 +158,7 @@ CHANNEL_MAPPING = {
 }
 
 # ===============================
-# 辅助函数（保持不变）
+# 辅助函数
 def get_run_count():
     if os.path.exists(COUNTER_FILE):
         try:
@@ -177,7 +175,7 @@ def save_run_count(count):
         print(f"⚠️ 写计数文件失败：{e}")
 
 # ===============================
-# 运营商识别函数（保持不变）
+# 运营商识别函数
 def get_isp_from_api(data):
     isp_raw = (data.get("isp") or "").lower()
     if "telecom" in isp_raw or "ct" in isp_raw or "chinatelecom" in isp_raw:
@@ -220,17 +218,24 @@ def fetch_fofa_ips():
         return []
 
 # ===============================
-# 第一阶段（修改）
+# 第一阶段（修改：清空 + 覆盖写入）
 def first_stage():
     os.makedirs(IP_DIR, exist_ok=True)
+    
+    # ---------- 方案A：清空历史 IP 文件 ----------
+    for f in os.listdir(IP_DIR):
+        if f.endswith(".txt"):
+            os.remove(os.path.join(IP_DIR, f))
+    print(f"🗑️ 已清空 {IP_DIR} 目录下的所有 .txt 文件")
+    # --------------------------------------------
+    
     all_ips = set()
-
-    # 改用 API 获取
     ip_list = fetch_fofa_ips()
     if ip_list:
         all_ips.update(ip_list)
     else:
         print("⚠️ FOFA 未返回任何 IP，请检查查询条件或密钥")
+        # 可选：若想保留旧文件，可在这里读取备份，但方案A是清空，所以继续空集
 
     province_isp_dict = {}
 
@@ -272,10 +277,11 @@ def first_stage():
     for filename, ip_set in province_isp_dict.items():
         path = os.path.join(IP_DIR, filename)
         try:
-            with open(path, "a", encoding="utf-8") as f:
+            # 使用 "w" 模式覆盖写入（因为已清空，其实 "a" 也可，但 "w" 明确表示覆盖）
+            with open(path, "w", encoding="utf-8") as f:
                 for ip_port in sorted(ip_set):
                     f.write(ip_port + "\n")
-            print(f"{path} 已追加写入 {len(ip_set)} 个 IP")
+            print(f"{path} 已写入 {len(ip_set)} 个 IP")
         except Exception as e:
             print(f"❌ 写入 {path} 失败：{e}")
 
@@ -455,15 +461,15 @@ def push_all_files():
     os.system("git push origin main || echo '⚠️ 推送失败'")
 
 # ===============================
-# 主执行逻辑（修改：强制生成）
+# 主执行逻辑
 if __name__ == "__main__":
     os.makedirs(IP_DIR, exist_ok=True)
     os.makedirs(RTP_DIR, exist_ok=True)
 
     run_count = first_stage()
 
-    # 临时强制生成，调试稳定后可改回 run_count % 10 == 0
-    if True:   # 改为 True 每次运行都生成
+    # 强制运行第二、三阶段（每次运行都执行）
+    if True:
         second_stage()
         third_stage()
     else:
