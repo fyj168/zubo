@@ -14,9 +14,9 @@ from datetime import datetime, timezone, timedelta
 
 # ---- Quake API 配置 ----
 QUAKE_API_URL = "https://quake.360.net/api/v3/search/quake_service"
-QUAKE_TOKEN = "6104edbd-e9da-4a93-9c43-1ed29fd0ba4d"          # 请替换为你的真实Token
+QUAKE_TOKEN = "6104edbd-e9da-4a93-9c43-1ed29fd0ba4d"        
 QUERY_STRING = 'service:"udpxy" AND country:"CN"'  # 查询语法
-SIZE = 500                               # 每次拉取数量（受账户权限限制）
+SIZE = 1000
 
 # ---- 文件与目录 ----
 COUNTER_FILE = "计数.txt"
@@ -25,47 +25,52 @@ RTP_DIR = "rtp"
 ZUBO_FILE = "zubo.txt"
 IPTV_FILE = "IPTV.txt"
 
-# ---- 备用网页爬取（可选，若API失败可尝试） ----
-# 若不想使用网页爬取，可留空列表
-FALLBACK_URLS = [
-    # "https://fofa.info/result?qbase64=InVkcHh5IiAmJiBjb3VudHJ5PSJDTiI%3D",
-]
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-}
+# ---- 备用网页爬取（可选） ----
+FALLBACK_URLS = []  # 留空则跳过
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 # ===============================
-# 分类与映射配置（保持不变）
+# 分类与映射（确保括号闭合）
 # ===============================
 
 CHANNEL_CATEGORIES = {
     "央视频道": [
         "CCTV1", "CCTV2", "CCTV3", "CCTV4", "CCTV4欧洲", "CCTV4美洲", "CCTV5", "CCTV5+", "CCTV6", "CCTV7",
-        "CCTV8", "CCTV9", "CCTV10", "CCTV11", "CCTV12", "CCTV13", "CCTV14", "CCTV15", "CCTV16", "CCTV17", "CCTV4K", "CCTV8K",
-        "兵器科技", "风云音乐", "风云足球", "风云剧场", "怀旧剧场", "第一剧场", "女性时尚", "世界地理", "央视台球", "高尔夫网球",
-        "央视文化精品", "卫生健康", "电视指南", "中学生", "发现之旅", "书法频道", "国学频道", "环球奇观"
+        "CCTV8", "CCTV9", "CCTV10", "CCTV11", "CCTV12", "CCTV13", "CCTV14", "CCTV15", "CCTV16", "CCTV17",
+        "CCTV4K", "CCTV8K", "兵器科技", "风云音乐", "风云足球", "风云剧场", "怀旧剧场", "第一剧场",
+        "女性时尚", "世界地理", "央视台球", "高尔夫网球", "央视文化精品", "卫生健康", "电视指南",
+        "中学生", "发现之旅", "书法频道", "国学频道", "环球奇观"
     ],
     "卫视频道": [
-        "湖南卫视4K", "北京卫视4K", "东方视卫4K", "广东卫视4K", "深圳卫视4K", "山东卫视4K", "四川卫视4K", "浙江卫视4K", "江苏卫视4K",
-        "湖南卫视", "浙江卫视", "江苏卫视", "东方卫视", "深圳卫视", "北京卫视", "广东卫视", "广西卫视", "东南卫视", "海南卫视",
-        "河北卫视", "河南卫视", "湖北卫视", "江西卫视", "四川卫视", "重庆卫视", "贵州卫视", "云南卫视", "天津卫视", "安徽卫视",
-        "山东卫视", "辽宁卫视", "黑龙江卫视", "吉林卫视", "内蒙古卫视", "宁夏卫视", "山西卫视", "陕西卫视", "甘肃卫视", "青海卫视",
-        "新疆卫视", "西藏卫视", "三沙卫视", "兵团卫视", "延边卫视", "安多卫视", "康巴卫视", "农林卫视", "山东教育卫视",
-        "中国教育1台", "中国教育2台", "中国教育3台", "中国教育4台", "早期教育","翡翠台","明珠台"
+        "湖南卫视4K", "北京卫视4K", "东方视卫4K", "广东卫视4K", "深圳卫视4K", "山东卫视4K",
+        "四川卫视4K", "浙江卫视4K", "江苏卫视4K", "湖南卫视", "浙江卫视", "江苏卫视", "东方卫视",
+        "深圳卫视", "北京卫视", "广东卫视", "广西卫视", "东南卫视", "海南卫视", "河北卫视", "河南卫视",
+        "湖北卫视", "江西卫视", "四川卫视", "重庆卫视", "贵州卫视", "云南卫视", "天津卫视", "安徽卫视",
+        "山东卫视", "辽宁卫视", "黑龙江卫视", "吉林卫视", "内蒙古卫视", "宁夏卫视", "山西卫视",
+        "陕西卫视", "甘肃卫视", "青海卫视", "新疆卫视", "西藏卫视", "三沙卫视", "兵团卫视",
+        "延边卫视", "安多卫视", "康巴卫视", "农林卫视", "山东教育卫视", "中国教育1台", "中国教育2台",
+        "中国教育3台", "中国教育4台", "早期教育", "翡翠台", "明珠台"
     ],
     "数字频道": [
-        "CHC动作电影", "CHC家庭影院", "CHC影迷电影", "淘电影", "淘精彩", "淘剧场", "淘4K", "淘娱乐", "淘BABY", "淘萌宠", "重温经典",
-        "星空卫视", "CHANNEL[V]", "凤凰卫视中文台", "凤凰卫视资讯台", "凤凰卫视香港台", "凤凰卫视电影台", "求索纪录", "求索科学",
-        "求索生活", "求索动物", "纪实人文", "金鹰纪实", "纪实科教", "睛彩青少", "睛彩竞技", "睛彩篮球", "睛彩广场舞", "魅力足球", "五星体育",
-        "劲爆体育", "快乐垂钓", "茶频道", "先锋乒羽", "天元围棋", "汽摩", "梨园频道", "文物宝库", "武术世界", "哒啵赛事", "哒啵电竞", "黑莓电影", "黑莓动画", 
-        "乐游", "生活时尚", "都市剧场", "欢笑剧场", "游戏风云", "金色学堂", "动漫秀场", "新动漫", "卡酷少儿", "金鹰卡通", "优漫卡通", "哈哈炫动", "嘉佳卡通", 
-        "中国交通", "中国天气", "华数4K", "华数星影", "华数动作影院", "华数喜剧影院", "华数家庭影院", "华数经典电影", "华数热播剧场", "华数碟战剧场",
-        "华数军旅剧场", "华数城市剧场", "华数武侠剧场", "华数古装剧场", "华数魅力时尚", "华数少儿动画", "华数动画"
+        "CHC动作电影", "CHC家庭影院", "CHC影迷电影", "淘电影", "淘精彩", "淘剧场", "淘4K",
+        "淘娱乐", "淘BABY", "淘萌宠", "重温经典", "星空卫视", "CHANNEL[V]", "凤凰卫视中文台",
+        "凤凰卫视资讯台", "凤凰卫视香港台", "凤凰卫视电影台", "求索纪录", "求索科学", "求索生活",
+        "求索动物", "纪实人文", "金鹰纪实", "纪实科教", "睛彩青少", "睛彩竞技", "睛彩篮球",
+        "睛彩广场舞", "魅力足球", "五星体育", "劲爆体育", "快乐垂钓", "茶频道", "先锋乒羽",
+        "天元围棋", "汽摩", "梨园频道", "文物宝库", "武术世界", "哒啵赛事", "哒啵电竞",
+        "黑莓电影", "黑莓动画", "乐游", "生活时尚", "都市剧场", "欢笑剧场", "游戏风云",
+        "金色学堂", "动漫秀场", "新动漫", "卡酷少儿", "金鹰卡通", "优漫卡通", "哈哈炫动",
+        "嘉佳卡通", "中国交通", "中国天气", "华数4K", "华数星影", "华数动作影院",
+        "华数喜剧影院", "华数家庭影院", "华数经典电影", "华数热播剧场", "华数碟战剧场",
+        "华数军旅剧场", "华数城市剧场", "华数武侠剧场", "华数古装剧场", "华数魅力时尚",
+        "华数少儿动画", "华数动画"
     ],
     "山西省台": [
-        "山西卫视", "黄河电视台", "山西经济与科技", "山西影视", "山西社会与法治", "山西文体生活", "晋中综合", "晋中公共", "运城1台", "运城2台",
-        "盐湖频道","山西黄河", "朔州-1", "朔州-2","孝义电视台","清徐","古交电视台","阳曲","九屏测试","太原1","太原2","太原3","太原4","太原5","太原教育",
-        "太原佰乐购","晋能控股","大同教育","阳泉-1新闻综合","阳泉-2科教",
+        "山西卫视", "黄河电视台", "山西经济与科技", "山西影视", "山西社会与法治",
+        "山西文体生活", "晋中综合", "晋中公共", "运城1台", "运城2台", "盐湖频道",
+        "山西黄河", "朔州-1", "朔州-2", "孝义电视台", "清徐", "古交电视台", "阳曲",
+        "九屏测试", "太原1", "太原2", "太原3", "太原4", "太原5", "太原教育",
+        "太原佰乐购", "晋能控股", "大同教育", "阳泉-1新闻综合", "阳泉-2科教"
     ],
 }
 
@@ -97,6 +102,390 @@ CHANNEL_MAPPING = {
     "第一剧场": ["CCTV-第一剧场", "CCTV第一剧场"],
     "风云足球": ["CCTV-风云足球", "CCTV风云足球"],
     "风云剧场": ["CCTV-风云剧场", "CCTV风云剧场"],
+    "怀旧剧场": ["CCTV-怀旧剧场", "CCTV怀旧剧场"],
+    "女性时尚": ["CCTV-女性时尚", "CCTV女性时尚"],
+    "世界地理": ["CCTV-世界地理", "CCTV世界地理"],
+    "央视台球": ["CCTV-央视台球", "CCTV央视台球"],
+    "高尔夫网球": ["CCTV-高尔夫网球", "CCTV高尔夫网球", "CCTV央视高网", "CCTV-高尔夫·网球", "央视高网"],
+    "央视文化精品": ["CCTV-央视文化精品", "CCTV央视文化精品", "CCTV文化精品", "CCTV-文化精品", "文化精品"],
+    "卫生健康": ["CCTV-卫生健康", "CCTV卫生健康"],
+    "电视指南": ["CCTV-电视指南", "CCTV电视指南"],
+    "农林卫视": ["陕西农林卫视"],
+    "三沙卫视": ["海南三沙卫视"],
+    "兵团卫视": ["新疆兵团卫视"],
+    "延边卫视": ["吉林延边卫视"],
+    "安多卫视": ["青海安多卫视"],
+    "康巴卫视": ["四川康巴卫视"],
+    "山东教育卫视": ["山东教育"],
+    "中国教育1台": ["CETV1", "中国教育一台", "中国教育1", "CETV-1 综合教育", "CETV-1"],
+    "中国教育2台": ["CETV2", "中国教育二台", "中国教育2", "CETV-2 空中课堂", "CETV-2"],
+    "中国教育3台": ["CETV3", "中国教育三台", "中国教育3", "CETV-3 教育服务", "CETV-3"],
+    "中国教育4台": ["CETV4", "中国教育四台", "中国教育4", "CETV-4 职业教育", "CETV-4"],
+    "早期教育": ["中国教育5台", "中国教育五台", "CETV早期教育", "华电早期教育", "CETV 早期教育"],
+    "湖南卫视": ["湖南卫视4K"],
+    "北京卫视": ["北京卫视4K"],
+    "东方卫视": ["东方视卫4K"],
+    "广东卫视": ["广东卫视4K"],
+    "深圳卫视": ["深圳卫视4K"],
+    "山东卫视": ["山东卫视4K"],
+    "四川卫视": ["四川卫视4K"],
+    "浙江卫视": ["浙江卫视4K"],
+    "江苏卫视": ["江苏卫视4K"],
+    "CHC影迷电影": ["CHC高清电影", "CHC-影迷电影", "影迷电影", "chc高清电影"],
+    "淘电影": ["IPTV淘电影", "北京IPTV淘电影", "北京淘电影"],
+    "淘精彩": ["IPTV淘精彩", "北京IPTV淘精彩", "北京淘精彩"],
+    "淘剧场": ["IPTV淘剧场", "北京IPTV淘剧场", "北京淘剧场"],
+    "淘4K": ["IPTV淘4K", "北京IPTV4K超清", "北京淘4K", "淘4K", "淘 4K"],
+    "淘娱乐": ["IPTV淘娱乐", "北京IPTV淘娱乐", "北京淘娱乐"],
+    "淘BABY": ["IPTV淘BABY", "北京IPTV淘BABY", "北京淘BABY", "IPTV淘baby", "北京IPTV淘baby", "北京淘baby"],
+    "淘萌宠": ["IPTV淘萌宠", "北京IPTV萌宠TV", "北京淘萌宠"],
+    "魅力足球": ["上海魅力足球"],
+    "睛彩青少": ["睛彩羽毛球"],
+    "求索纪录": ["求索记录", "求索纪录4K", "求索记录4K", "求索纪录 4K", "求索记录 4K"],
+    "金鹰纪实": ["湖南金鹰纪实", "金鹰记实"],
+    "纪实科教": ["北京纪实科教", "BRTV纪实科教", "纪实科教8K"],
+    "星空卫视": ["星空衛視", "星空衛视", "星空卫視"],
+    "CHANNEL[V]": ["CHANNEL-V", "Channel[V]"],
+    "凤凰卫视中文台": ["凤凰中文", "凤凰中文台", "凤凰卫视中文", "凤凰卫视"],
+    "凤凰卫视香港台": ["凤凰香港台", "凤凰卫视香港", "凤凰香港"],
+    "凤凰卫视资讯台": ["凤凰资讯", "凤凰资讯台", "凤凰咨询", "凤凰咨询台", "凤凰卫视咨询台", "凤凰卫视资讯", "凤凰卫视咨询"],
+    "凤凰卫视电影台": ["凤凰电影", "凤凰电影台", "凤凰卫视电影", "鳳凰衛視電影台", " 凤凰电影"],
+    "茶频道": ["湖南茶频道"],
+    "快乐垂钓": ["湖南快乐垂钓"],
+    "先锋乒羽": ["湖南先锋乒羽"],
+    "天元围棋": ["天元围棋频道"],
+    "汽摩": ["重庆汽摩", "汽摩频道", "重庆汽摩频道"],
+    "梨园频道": ["河南梨园频道", "梨园", "河南梨园"],
+    "文物宝库": ["河南文物宝库"],
+    "武术世界": ["河南武术世界"],
+    "乐游": ["乐游频道", "上海乐游频道", "乐游纪实", "SiTV乐游频道", "SiTV 乐游频道"],
+    "欢笑剧场": ["上海欢笑剧场4K", "欢笑剧场 4K", "欢笑剧场4K", "上海欢笑剧场"],
+    "生活时尚": ["生活时尚4K", "SiTV生活时尚", "上海生活时尚"],
+    "都市剧场": ["都市剧场4K", "SiTV都市剧场", "上海都市剧场"],
+    "游戏风云": ["游戏风云4K", "SiTV游戏风云", "上海游戏风云"],
+    "金色学堂": ["金色学堂4K", "SiTV金色学堂", "上海金色学堂"],
+    "动漫秀场": ["动漫秀场4K", "SiTV动漫秀场", "上海动漫秀场"],
+    "卡酷少儿": ["北京KAKU少儿", "BRTV卡酷少儿", "北京卡酷少儿", "卡酷动画"],
+    "哈哈炫动": ["炫动卡通", "上海哈哈炫动"],
+    "优漫卡通": ["江苏优漫卡通", "优漫漫画"],
+    "金鹰卡通": ["湖南金鹰卡通"],
+    "中国交通": ["中国交通频道"],
+    "中国天气": ["中国天气频道"],
+    "华数4K": ["华数低于4K", "华数4K电影", "华数爱上4K"],
+}
+
+# ===============================
+# 辅助函数
+# ===============================
+
+def get_run_count():
+    if os.path.exists(COUNTER_FILE):
+        try:
+            return int(open(COUNTER_FILE, "r", encoding="utf-8").read().strip() or "0")
+        except Exception:
+            return 0
+    return 0
+
+def save_run_count(count):
+    try:
+        with open(COUNTER_FILE, "w", encoding="utf-8") as f:
+            f.write(str(count))
+    except Exception as e:
+        print(f"⚠️ 写计数文件失败：{e}")
+
+def get_isp_from_api(data):
+    isp_raw = (data.get("isp") or "").lower()
+    if "telecom" in isp_raw or "ct" in isp_raw or "chinatelecom" in isp_raw:
+        return "电信"
+    elif "unicom" in isp_raw or "cu" in isp_raw or "chinaunicom" in isp_raw:
+        return "联通"
+    elif "mobile" in isp_raw or "cm" in isp_raw or "chinamobile" in isp_raw:
+        return "移动"
+    return "未知"
+
+def get_isp_by_regex(ip):
+    if re.match(r"^(1[0-9]{2}|2[0-3]{2}|42|43|58|59|60|61|110|111|112|113|114|115|116|117|118|119|120|121|122|123|124|125|126|127|175|180|182|183|184|185|186|187|188|189|223)\.", ip):
+        return "电信"
+    elif re.match(r"^(42|43|58|59|60|61|110|111|112|113|114|115|116|117|118|119|120|121|122|123|124|125|126|127|175|180|182|183|184|185|186|187|188|189|223)\.", ip):
+        return "联通"
+    elif re.match(r"^(223|36|37|38|39|100|101|102|103|104|105|106|107|108|109|134|135|136|137|138|139|150|151|152|157|158|159|170|178|182|183|184|187|188|189)\.", ip):
+        return "移动"
+    return "未知"
+
+# ===============================
+# Quake API 获取 IP
+# ===============================
+
+def fetch_quake_ips():
+    if not QUAKE_TOKEN:
+        print("❌ 未设置 QUAKE_TOKEN")
+        return []
+    headers = {"X-QuakeToken": QUAKE_TOKEN, "Content-Type": "application/json"}
+    payload = {
+        "query": QUERY_STRING,
+        "size": SIZE,
+        "start": 0,
+        "ignore_cache": False,
+        "include": ["ip", "port", "service"]
+    }
+    try:
+        resp = requests.post(QUAKE_API_URL, headers=headers, json=payload, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("code") != 0:
+            print(f"❌ Quake 错误: {data.get('message')}")
+            return []
+        results = data.get("data", [])
+        ip_list = [f"{item['ip']}:{item['port']}" for item in results if item.get('ip') and item.get('port')]
+        print(f"📡 Quake 返回 {len(ip_list)} 个 IP")
+        return ip_list
+    except Exception as e:
+        print(f"❌ Quake 请求失败: {e}")
+        return []
+
+# ===============================
+# 第一阶段
+# ===============================
+
+def first_stage():
+    os.makedirs(IP_DIR, exist_ok=True)
+    for f in os.listdir(IP_DIR):
+        if f.endswith(".txt"):
+            os.remove(os.path.join(IP_DIR, f))
+    print("🗑️ 已清空 ip/*.txt")
+
+    all_ips = set()
+    ip_list = fetch_quake_ips()
+    if ip_list:
+        all_ips.update(ip_list)
+    else:
+        print("⚠️ Quake 无数据，尝试备用爬取...")
+        for url in FALLBACK_URLS:
+            try:
+                r = requests.get(url, headers=HEADERS, timeout=15)
+                urls = re.findall(r'<a href="http://(.*?)"', r.text)
+                all_ips.update(u.strip() for u in urls if u.strip())
+            except Exception as e:
+                print(f"❌ 备用爬取失败: {e}")
+            time.sleep(3)
+
+    if not all_ips:
+        print("⚠️ 未获取任何 IP")
+        return get_run_count() + 1
+
+    province_isp_dict = {}
+    for ip_port in all_ips:
+        try:
+            host = ip_port.split(":")[0]
+            if not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", host):
+                try:
+                    ip = socket.gethostbyname(host)
+                    print(f"🌐 域名解析: {host} -> {ip}")
+                except Exception:
+                    print(f"❌ 解析失败: {ip_port}")
+                    continue
+            else:
+                ip = host
+            res = requests.get(f"http://ip-api.com/json/{ip}?lang=zh-CN", timeout=10)
+            data = res.json()
+            province = data.get("regionName", "未知")
+            isp = get_isp_from_api(data)
+            if isp == "未知":
+                isp = get_isp_by_regex(ip)
+            if isp == "未知":
+                continue
+            fname = f"{province}{isp}.txt"
+            province_isp_dict.setdefault(fname, set()).add(ip_port)
+        except Exception as e:
+            print(f"⚠️ 解析出错: {e}")
+
+    count = get_run_count() + 1
+    save_run_count(count)
+
+    for fname, ip_set in province_isp_dict.items():
+        path = os.path.join(IP_DIR, fname)
+        with open(path, "w", encoding="utf-8") as f:
+            for ip_port in sorted(ip_set):
+                f.write(ip_port + "\n")
+        print(f"{path} 写入 {len(ip_set)} 个 IP")
+
+    print(f"✅ 第一阶段完成，轮次 {count}")
+    return count
+
+# ===============================
+# 第二阶段
+# ===============================
+
+def second_stage():
+    print("🔔 第二阶段：生成 zubo.txt")
+    if not os.path.exists(IP_DIR) or not os.path.exists(RTP_DIR):
+        print("⚠️ ip 或 rtp 目录不存在")
+        return
+    combined = []
+    for ip_file in os.listdir(IP_DIR):
+        if not ip_file.endswith(".txt"):
+            continue
+        ip_path = os.path.join(IP_DIR, ip_file)
+        rtp_path = os.path.join(RTP_DIR, ip_file)
+        if not os.path.exists(rtp_path):
+            continue
+        with open(ip_path, encoding="utf-8") as f1, open(rtp_path, encoding="utf-8") as f2:
+            ip_lines = [x.strip() for x in f1 if x.strip()]
+            rtp_lines = [x.strip() for x in f2 if x.strip()]
+        if not ip_lines or not rtp_lines:
+            continue
+        for ip_port in ip_lines:
+            for rtp_line in rtp_lines:
+                if "," not in rtp_line:
+                    continue
+                ch_name, rtp_url = rtp_line.split(",", 1)
+                if "rtp://" in rtp_url:
+                    part = rtp_url.split("rtp://", 1)[1]
+                    combined.append(f"{ch_name},http://{ip_port}/rtp/{part}")
+                elif "udp://" in rtp_url:
+                    part = rtp_url.split("udp://", 1)[1]
+                    combined.append(f"{ch_name},http://{ip_port}/udp/{part}")
+    unique = {}
+    for line in combined:
+        url_part = line.split(",", 1)[1]
+        if url_part not in unique:
+            unique[url_part] = line
+    with open(ZUBO_FILE, "w", encoding="utf-8") as f:
+        for line in unique.values():
+            f.write(line + "\n")
+    print(f"🎯 第二阶段完成，写入 {len(unique)} 条")
+
+# ===============================
+# 第三阶段
+# ===============================
+
+def third_stage():
+    print("🧩 第三阶段：检测并生成 IPTV.txt")
+    if not os.path.exists(ZUBO_FILE):
+        print("⚠️ zubo.txt 不存在")
+        return
+    def check_stream(url, timeout=5):
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_streams", "-i", url],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=timeout + 2
+            )
+            return b"codec_type" in result.stdout
+        except Exception:
+            return False
+
+    alias_map = {}
+    for main_name, aliases in CHANNEL_MAPPING.items():
+        for alias in aliases:
+            alias_map[alias] = main_name
+
+    ip_info = {}
+    if os.path.exists(IP_DIR):
+        for fname in os.listdir(IP_DIR):
+            if not fname.endswith(".txt"):
+                continue
+            operator = fname.replace(".txt", "")
+            with open(os.path.join(IP_DIR, fname), encoding="utf-8") as f:
+                for line in f:
+                    ip_port = line.strip()
+                    if ip_port:
+                        ip_info[ip_port] = operator
+
+    groups = {}
+    with open(ZUBO_FILE, encoding="utf-8") as f:
+        for line in f:
+            if "," not in line:
+                continue
+            ch_name, url = line.strip().split(",", 1)
+            ch_main = alias_map.get(ch_name, ch_name)
+            m = re.match(r"http://([^/]+)/", url)
+            if not m:
+                continue
+            ip_port = m.group(1)
+            groups.setdefault(ip_port, []).append((ch_main, url))
+
+    def detect_ip(ip_port, entries):
+        rep = [u for c, u in entries if c == "CCTV1"]
+        if not rep and entries:
+            rep = [entries[0][1]]
+        ok = any(check_stream(u) for u in rep)
+        return ip_port, ok
+
+    print(f"🚀 多线程检测 {len(groups)} 个 IP...")
+    playable = set()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(detect_ip, ip, chs): ip for ip, chs in groups.items()}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                ip_port, ok = future.result()
+                if ok:
+                    playable.add(ip_port)
+            except Exception as e:
+                print(f"⚠️ 线程异常: {e}")
+
+    print(f"✅ 可播放 IP 共 {len(playable)} 个")
+
+    valid_lines = []
+    seen = set()
+    operator_playable = {}
+    for ip_port in playable:
+        operator = ip_info.get(ip_port, "未知")
+        for c, u in groups.get(ip_port, []):
+            key = f"{c},{u}"
+            if key not in seen:
+                seen.add(key)
+                valid_lines.append(f"{c},{u}${operator}")
+                operator_playable.setdefault(operator, set()).add(ip_port)
+
+    # 写回可用 IP
+    for operator, ip_set in operator_playable.items():
+        target = os.path.join(IP_DIR, operator + ".txt")
+        with open(target, "w", encoding="utf-8") as f:
+            for ip_p in sorted(ip_set):
+                f.write(ip_p + "\n")
+        print(f"📥 写回 {target}，{len(ip_set)} 个")
+
+    # 生成 IPTV.txt
+    beijing_now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+    with open(IPTV_FILE, "w", encoding="utf-8") as f:
+        f.write(f"更新时间: {beijing_now}（北京时间）\n\n")
+        f.write("更新时间,#genre#\n")
+        f.write(f"{beijing_now},https://\n\n")
+        for category, ch_list in CHANNEL_CATEGORIES.items():
+            f.write(f"{category},#genre#\n")
+            for ch in ch_list:
+                for line in valid_lines:
+                    name = line.split(",", 1)[0]
+                    if name == ch:
+                        f.write(line + "\n")
+            f.write("\n")
+    print(f"🎯 IPTV.txt 生成，共 {len(valid_lines)} 条")
+
+# ===============================
+# Git 推送
+# ===============================
+
+def push_all_files():
+    print("🚀 推送更新到 GitHub...")
+    os.system('git config --global user.name "github-actions"')
+    os.system('git config --global user.email "github-actions@users.noreply.github.com"')
+    os.system("git add 计数.txt ip/*.txt IPTV.txt || true")
+    os.system('git commit -m "自动更新" || echo "无需提交"')
+    os.system("git push origin main || echo '推送失败'")
+
+# ===============================
+# 主程序
+# ===============================
+
+if __name__ == "__main__":
+    os.makedirs(IP_DIR, exist_ok=True)
+    os.makedirs(RTP_DIR, exist_ok=True)
+    run_count = first_stage()
+    # 每次运行都执行第二、三阶段（可根据需要改为 run_count % 10 == 0）
+    second_stage()
+    third_stage()
+    push_all_files()    "风云剧场": ["CCTV-风云剧场", "CCTV风云剧场"],
     "怀旧剧场": ["CCTV-怀旧剧场", "CCTV怀旧剧场"],
     "女性时尚": ["CCTV-女性时尚", "CCTV女性时尚"],
     "世界地理": ["CCTV-世界地理", "CCTV世界地理"],
